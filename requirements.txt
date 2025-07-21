@@ -12,7 +12,15 @@ black>=23.0.0
 isort>=5.12.0
 mypy>=1.0.0
 
-# Future hardware dependencies (commented out for Iteration 1)
-# adafruit-circuitpython-pca9685
+# Hardware dependencies (Iteration 2+)
+# GPIO control for servo motors
+RPi.GPIO>=0.7.0
+# Adafruit libraries (preferred, but may not work on all systems)
+adafruit-circuitpython-pca9685>=3.4.0
+adafruit-circuitpython-busdevice>=5.2.0
+# Fallback I2C library
+smbus2>=0.5.0
+
+# Future dependencies (Iteration 3+)
 # opencv-python
 # numpy 

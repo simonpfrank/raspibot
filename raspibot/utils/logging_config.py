@@ -62,7 +62,7 @@ def get_correlation_id() -> Tuple[Optional[str], Optional[str]]:
 
 def setup_logging(name: str = "raspibot") -> logging.Logger:
     """Setup logging with custom formatter and configuration."""
-    from raspibot.config.settings import LOG_LEVEL, LOG_TO_FILE
+    from raspibot.config.settings import LOG_LEVEL, LOG_TO_FILE, LOG_FILE_PATH
     
     # Create logger
     logger = logging.getLogger(name)
@@ -84,9 +84,21 @@ def setup_logging(name: str = "raspibot") -> logging.Logger:
     
     # Add file handler if enabled
     if LOG_TO_FILE:
-        file_handler = logging.FileHandler('data/logs/raspibot.log')
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        try:
+            # Ensure the log directory exists
+            log_dir = os.path.dirname(LOG_FILE_PATH)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
+            # Create file handler
+            file_handler = logging.FileHandler(LOG_FILE_PATH)
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+            
+        except Exception as e:
+            # If file logging fails, log the error to console and continue
+            logger.warning(f"Failed to setup file logging to '{LOG_FILE_PATH}': {e}")
+            logger.warning("Continuing with console logging only")
     
     return logger 

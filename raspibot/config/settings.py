@@ -11,4 +11,5 @@ from typing import Final
 DEBUG: Final[bool] = os.getenv('RASPIBOT_DEBUG', 'false').lower() == 'true'
 LOG_LEVEL: Final[str] = os.getenv('RASPIBOT_LOG_LEVEL', 'INFO')
 LOG_TO_FILE: Final[bool] = os.getenv('RASPIBOT_LOG_TO_FILE', 'true').lower() == 'true'
-LOG_STACKTRACE: Final[bool] = os.getenv('RASPIBOT_LOG_STACKTRACE', 'false').lower() == 'true' 
+LOG_STACKTRACE: Final[bool] = os.getenv('RASPIBOT_LOG_STACKTRACE', 'false').lower() == 'true'
+LOG_FILE_PATH: Final[str] = os.getenv('RASPIBOT_LOG_FILE_PATH', 'data/logs/raspibot.log') 
