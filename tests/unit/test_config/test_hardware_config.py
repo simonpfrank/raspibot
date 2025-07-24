@@ -28,7 +28,7 @@ class TestHardwareConfig:
         """Test that servo angle limits are reasonable values."""
         from raspibot.config import hardware_config
         assert hardware_config.SERVO_MIN_ANGLE == 0
-        assert hardware_config.SERVO_MAX_ANGLE == 180
+        assert hardware_config.SERVO_MAX_ANGLE == 359  # Updated for full 360-degree servos
         assert hardware_config.SERVO_DEFAULT_ANGLE == 90
 
     def test_servo_channels(self):

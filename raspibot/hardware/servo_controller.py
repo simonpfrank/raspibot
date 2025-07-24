@@ -33,6 +33,12 @@ from raspibot.config.hardware_config import (
     GPIO_SERVO_MAX_STEP_SIZE,
     GPIO_SERVO_STEP_DELAY,
     GPIO_SERVO_DUTY_CYCLE_PRECISION,
+    PCA9685_DEADBAND,
+    PCA9685_STABILIZATION_DELAY,
+    PCA9685_MIN_STEP_SIZE,
+    PCA9685_MAX_STEP_SIZE,
+    PCA9685_STEP_DELAY,
+    PCA9685_PWM_PRECISION,
 )
 
 
@@ -192,7 +198,7 @@ class PCA9685ServoController(ServoInterface):
             self.logger.warning("Hardware not available - frequency setting simulated")
     
     def set_servo_angle(self, channel: int, angle: float) -> None:
-        """Set servo angle with validation.
+        """Set servo angle directly without anti-jitter measures.
         
         Args:
             channel: Servo channel (0-15)
@@ -236,7 +242,7 @@ class PCA9685ServoController(ServoInterface):
         return self.current_angles.get(channel, SERVO_DEFAULT_ANGLE)
     
     def smooth_move_to_angle(self, channel: int, target_angle: float, speed: float = 1.0) -> None:
-        """Smooth movement to target angle.
+        """Smooth movement to target angle with anti-jitter measures.
         
         Args:
             channel: Servo channel (0-15)
@@ -249,19 +255,30 @@ class PCA9685ServoController(ServoInterface):
         current_angle = self.get_servo_angle(channel)
         angle_diff = target_angle - current_angle
         
-        if abs(angle_diff) < 1.0:  # Close enough
-            self.set_servo_angle(channel, target_angle)
+        # Check if movement is needed
+        if abs(angle_diff) < PCA9685_DEADBAND:
+            self.logger.debug(f"Servo {channel} movement {abs(angle_diff):.1f}° below deadband, skipping")
             return
         
-        # Calculate step size and delay
-        max_step = 5.0 * speed  # Max 5 degrees per step
-        step_size = min(max_step, abs(angle_diff) / 10)  # At least 10 steps
+        # Calculate step size and delay for smoother movement
+        max_step = PCA9685_MAX_STEP_SIZE * speed
+        min_step = PCA9685_MIN_STEP_SIZE
+        
+        # Use more steps for smoother movement (at least 20 steps for large movements)
+        num_steps = max(20, int(abs(angle_diff) / 2))  # At least 20 steps, or 1 step per 2 degrees
+        step_size = abs(angle_diff) / num_steps
+        
+        # Ensure step size is within bounds
+        step_size = max(min_step, min(max_step, step_size))
         
         # Move in steps
         current = current_angle
-        step_delay = 0.05 / speed  # 50ms base delay
+        step_delay = PCA9685_STEP_DELAY / speed  # Adjust delay based on speed
         
-        while abs(current - target_angle) > 1.0:
+        self.logger.debug(f"Servo {channel} smooth move: {current_angle:.1f}° -> {target_angle:.1f}°, "
+                         f"step_size={step_size:.2f}°, steps={num_steps}, step_delay={step_delay:.3f}s")
+        
+        while abs(current - target_angle) > PCA9685_DEADBAND:
             if current < target_angle:
                 current = min(current + step_size, target_angle)
             else:
@@ -270,8 +287,12 @@ class PCA9685ServoController(ServoInterface):
             self.set_servo_angle(channel, current)
             time.sleep(step_delay)
         
-        # Final position
-        self.set_servo_angle(channel, target_angle)
+        # Final position (skip deadband check for final position)
+        self._set_pwm_for_angle(channel, target_angle)
+        self.current_angles[channel] = target_angle
+        time.sleep(PCA9685_STABILIZATION_DELAY)
+        
+        self.logger.debug(f"Servo {channel} smooth move completed: {target_angle:.1f}°")
     
     def emergency_stop(self) -> None:
         """Emergency stop all servos."""
@@ -333,19 +354,22 @@ class PCA9685ServoController(ServoInterface):
         return self.calibration_offsets.get(channel, 0.0)
     
     def _set_pwm_for_angle(self, channel: int, angle: float) -> None:
-        """Set PWM duty cycle for servo angle.
+        """Set PWM duty cycle for servo angle with improved precision.
         
         Args:
             channel: Servo channel (0-15)
             angle: Angle in degrees
         """
         if self.use_adafruit and self.pca9685 is not None:
-            # Convert angle to pulse width
+            # Convert angle to pulse width with improved precision
             # 0° = 1ms pulse, 180° = 2ms pulse
             # At 50Hz, 1ms = 0.05 duty cycle, 2ms = 0.1 duty cycle
             
             pulse_width_ms = 1.0 + (angle / 180.0)  # 1ms to 2ms
             duty_cycle = pulse_width_ms / 20.0  # 20ms period at 50Hz
+            
+            # Apply precision rounding to reduce jitter
+            duty_cycle = round(duty_cycle, PCA9685_PWM_PRECISION)
             
             # Convert to 16-bit value (0-65535)
             pwm_value = int(duty_cycle * 65535)
@@ -357,12 +381,15 @@ class PCA9685ServoController(ServoInterface):
             self.pca9685.channels[channel].duty_cycle = pwm_value
             
         elif self.bus is not None:
-            # Convert angle to pulse width
+            # Convert angle to pulse width with improved precision
             # 0° = 1ms pulse, 180° = 2ms pulse
             # At 50Hz, 1ms = 0.05 duty cycle, 2ms = 0.1 duty cycle
             
             pulse_width_ms = 1.0 + (angle / 180.0)  # 1ms to 2ms
             duty_cycle = pulse_width_ms / 20.0  # 20ms period at 50Hz
+            
+            # Apply precision rounding to reduce jitter
+            duty_cycle = round(duty_cycle, PCA9685_PWM_PRECISION)
             
             # Convert to 12-bit value (0-4095)
             pwm_value = int(duty_cycle * 4095)

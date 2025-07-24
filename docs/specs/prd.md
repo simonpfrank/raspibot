@@ -158,23 +158,34 @@ raspibot/
 
 ## 4. Feature Requirements by Phase
 
-### 4.1 Phase 1 - Basic Pan/Tilt Control
-**MVP Features:**
-- [x] Servo control via PCA9685
-- [ ] Basic camera pan/tilt movement
+### 4.1 Phase 1 - Core Hardware & Basic Interaction
+**Completed Features:**
+- [x] Servo control via PCA9685 and GPIO
+- [x] Basic camera pan/tilt movement with coordinate system
+- [x] Hardware abstraction layer for servo controllers
+- [x] Anti-jitter measures and smooth movement
+- [x] Calibration tools for servo positions
+- [x] Comprehensive testing (76% coverage)
+
+**Remaining Features:**
 - [ ] Face detection using OpenCV
 - [ ] Automatic face tracking with camera
-- [ ] Manual control interface
-- [ ] Calibration tools for servo positions
-- [ ] Sleep mode (tilt down, pan center)
+- [ ] Multi-camera support (webcam, PiCamera, AI camera)
+- [ ] Face collection handling (multiple faces)
+- [ ] Sleep mode (tilt down, pan center) with dramatic movement sequence
 - [ ] Activity monitoring for sleep triggers
+- [ ] Manual control interface (backlog)
 
 **Technical Requirements:**
 - I2C communication with PCA9685
+- GPIO servo control with RPi.GPIO
 - Real-time face detection (>10 FPS)
 - Smooth servo movement (no jitter)
 - Configurable servo limits and speeds
+- Multi-camera abstraction layer
+- Coordinate system translation for servo movement
 - Sleep mode with camera processing disabled
+- Activity monitoring with face detection
 - Audio wake word detection during sleep
 
 ### 4.2 Phase 2 - Enhanced Vision and Voice
