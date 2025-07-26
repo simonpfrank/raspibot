@@ -11,7 +11,7 @@ import sys
 import os
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from raspibot.hardware.servo_controller import GPIOServoController
 from raspibot.config.hardware_config import (

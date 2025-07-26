@@ -6,7 +6,7 @@ import os
 import argparse
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from raspibot.core.face_tracking_robot import FaceTrackingRobot
 

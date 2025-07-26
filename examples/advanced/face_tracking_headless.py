@@ -7,12 +7,12 @@ import time
 import numpy as np
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from raspibot.vision.camera import Camera
 from raspibot.vision.face_detector import FaceDetector
 from raspibot.vision.face_tracker import FaceTracker
-from raspibot.hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from raspibot.hardware.servo_selector import get_servo_controller, ServoControllerType
 from raspibot.movement.pan_tilt import PanTiltSystem
 
 
@@ -60,7 +60,7 @@ def test_components():
     try:
         # Try PCA9685
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
             print("   ✅ PCA9685 controller available")
             print(f"      Type: {controller.get_controller_type()}")
             print(f"      Channels: {controller.get_available_channels()}")
@@ -70,7 +70,7 @@ def test_components():
         
         # Try GPIO
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+            controller = get_servo_controller(ServoControllerType.GPIO)
             print("   ✅ GPIO controller available")
             print(f"      Type: {controller.get_controller_type()}")
             print(f"      Channels: {controller.get_available_channels()}")
@@ -137,7 +137,7 @@ def test_integration():
         from unittest.mock import Mock, patch
         
         # Mock servo controller
-        with patch('raspibot.hardware.servo_factory.ServoControllerFactory.create_controller') as mock_factory:
+        with patch('raspibot.hardware.servo_selector.get_servo_controller') as mock_factory:
             mock_controller = Mock()
             mock_controller.get_controller_type.return_value = "Mock"
             mock_controller.get_available_channels.return_value = [0, 1]
@@ -150,7 +150,7 @@ def test_integration():
             from raspibot.vision.face_tracker import FaceTracker
             from raspibot.movement.pan_tilt import PanTiltSystem
             
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
             pan_tilt = PanTiltSystem(controller)
             tracker = FaceTracker(pan_tilt, 640, 480)
             
@@ -253,13 +253,13 @@ def main():
             print("  📹 Camera: Not available")
         
         try:
-            ServoControllerFactory.create_controller(ServoControllerType.PCA9685).shutdown()
+            get_servo_controller(ServoControllerType.PCA9685).shutdown()
             print("  🎛️  PCA9685 Servos: Available")
         except:
             print("  🎛️  PCA9685 Servos: Not available")
         
         try:
-            ServoControllerFactory.create_controller(ServoControllerType.GPIO).shutdown()
+            get_servo_controller(ServoControllerType.GPIO).shutdown()
             print("  🔌 GPIO Servos: Available")
         except:
             print("  🔌 GPIO Servos: Not available")

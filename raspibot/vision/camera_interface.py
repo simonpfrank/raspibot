@@ -1,14 +1,16 @@
-"""Abstract camera interface for different camera implementations."""
+"""Simple camera interface for different camera implementations."""
 
-from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 import numpy as np
 
 
-class CameraInterface(ABC):
-    """Abstract base class for camera implementations."""
+class CameraInterface:
+    """Simple base class for camera implementations.
     
-    @abstractmethod
+    This provides a common interface without the complexity of abstract base classes.
+    Subclasses should implement all methods or they will raise NotImplementedError.
+    """
+    
     def start(self) -> bool:
         """
         Start camera capture.
@@ -16,9 +18,8 @@ class CameraInterface(ABC):
         Returns:
             True if camera started successfully, False otherwise
         """
-        pass
+        raise NotImplementedError("Subclass must implement start()")
     
-    @abstractmethod
     def get_frame(self) -> Optional[np.ndarray]:
         """
         Get a single frame from the camera.
@@ -26,14 +27,12 @@ class CameraInterface(ABC):
         Returns:
             Frame as numpy array, or None if failed
         """
-        pass
+        raise NotImplementedError("Subclass must implement get_frame()")
     
-    @abstractmethod
     def stop(self) -> None:
         """Stop camera capture and release resources."""
-        pass
+        raise NotImplementedError("Subclass must implement stop()")
     
-    @abstractmethod
     def get_resolution(self) -> Tuple[int, int]:
         """
         Get current camera resolution.
@@ -41,9 +40,8 @@ class CameraInterface(ABC):
         Returns:
             Tuple of (width, height) in pixels
         """
-        pass
+        raise NotImplementedError("Subclass must implement get_resolution()")
     
-    @abstractmethod
     def get_fps(self) -> float:
         """
         Get current camera FPS.
@@ -51,9 +49,8 @@ class CameraInterface(ABC):
         Returns:
             Current FPS as float
         """
-        pass
+        raise NotImplementedError("Subclass must implement get_fps()")
     
-    @abstractmethod
     def is_available(self) -> bool:
         """
         Check if camera is available and working.
@@ -61,7 +58,7 @@ class CameraInterface(ABC):
         Returns:
             True if camera is available, False otherwise
         """
-        pass
+        raise NotImplementedError("Subclass must implement is_available()")
     
     def __enter__(self):
         """Context manager entry."""

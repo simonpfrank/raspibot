@@ -3,7 +3,7 @@
 import time
 from typing import Optional
 
-from ..hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from ..hardware.servo_factory import get_servo_controller, ServoControllerType
 from ..movement.pan_tilt import PanTiltSystem
 from ..vision.camera import Camera
 from ..vision.face_tracker import FaceTracker
@@ -29,7 +29,7 @@ class FaceTrackingRobot:
         # Initialize hardware
         try:
             controller_type = ServoControllerType.PCA9685 if servo_type == "pca9685" else ServoControllerType.GPIO
-            self.servo_controller = ServoControllerFactory.create_controller(controller_type)
+            self.servo_controller = get_servo_controller(controller_type)
             self.pan_tilt = PanTiltSystem(self.servo_controller)
             
             self.logger.info(f"Servo controller initialized: {servo_type}")

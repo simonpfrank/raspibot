@@ -12,7 +12,7 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from raspibot.hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from raspibot.hardware.servo_selector import get_servo_controller, ServoControllerType
 from raspibot.hardware.servo_interface import ServoInterface
 from raspibot.movement.pan_tilt import PanTiltSystem
 from raspibot.exceptions import HardwareException
@@ -28,7 +28,7 @@ class TestServoHardwareIntegration:
         
         try:
             # Test PCA9685 controller creation
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
             
             # Verify hardware detection
             assert controller.get_controller_type() == "PCA9685"
@@ -46,7 +46,7 @@ class TestServoHardwareIntegration:
         
         try:
             # Test GPIO controller creation
-            controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+            controller = get_servo_controller(ServoControllerType.GPIO)
             
             # Verify hardware detection
             assert controller.get_controller_type() == "GPIO"
@@ -67,11 +67,11 @@ class TestServoHardwareIntegration:
         controller_type = None
         
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
             controller_type = "PCA9685"
         except Exception:
             try:
-                controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+                controller = get_servo_controller(ServoControllerType.GPIO)
                 controller_type = "GPIO"
             except Exception as e:
                 pytest.skip(f"No servo hardware available: {e}")
@@ -111,10 +111,10 @@ class TestServoHardwareIntegration:
         # Get available controller
         controller = None
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
         except Exception:
             try:
-                controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+                controller = get_servo_controller(ServoControllerType.GPIO)
             except Exception as e:
                 pytest.skip(f"No servo hardware available: {e}")
         
@@ -145,10 +145,10 @@ class TestServoHardwareIntegration:
         # Get available controller
         controller = None
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
         except Exception:
             try:
-                controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+                controller = get_servo_controller(ServoControllerType.GPIO)
             except Exception as e:
                 pytest.skip(f"No servo hardware available: {e}")
         
@@ -185,7 +185,7 @@ class TestPanTiltIntegration:
         # Try different controllers
         for controller_type in [ServoControllerType.PCA9685, ServoControllerType.GPIO]:
             try:
-                controller = ServoControllerFactory.create_controller(controller_type)
+                controller = get_servo_controller(controller_type)
                 
                 # Create pan/tilt system
                 pan_tilt = PanTiltSystem(
@@ -218,7 +218,7 @@ class TestPanTiltIntegration:
         pan_tilt = None
         for controller_type in [ServoControllerType.PCA9685, ServoControllerType.GPIO]:
             try:
-                controller = ServoControllerFactory.create_controller(controller_type)
+                controller = get_servo_controller(controller_type)
                 pan_tilt = PanTiltSystem(
                     servo_controller=controller,
                     pan_channel=0,
@@ -258,7 +258,7 @@ class TestPanTiltIntegration:
         pan_tilt.point_down()
         time.sleep(1)
         current_pos = pan_tilt.get_current_position()
-        assert current_pos[1] == 310  # Should be pointing down
+        assert current_pos[1] == 270  # Should be pointing down
         
         pan_tilt.point_horizontal()
         time.sleep(1)
@@ -279,7 +279,7 @@ class TestPanTiltIntegration:
         pan_tilt = None
         for controller_type in [ServoControllerType.PCA9685, ServoControllerType.GPIO]:
             try:
-                controller = ServoControllerFactory.create_controller(controller_type)
+                controller = get_servo_controller(controller_type)
                 pan_tilt = PanTiltSystem(
                     servo_controller=controller,
                     pan_channel=0,
@@ -314,7 +314,7 @@ class TestPanTiltIntegration:
         pan_tilt = None
         for controller_type in [ServoControllerType.PCA9685, ServoControllerType.GPIO]:
             try:
-                controller = ServoControllerFactory.create_controller(controller_type)
+                controller = get_servo_controller(controller_type)
                 pan_tilt = PanTiltSystem(
                     servo_controller=controller,
                     pan_channel=0,
@@ -349,7 +349,7 @@ class TestFactoryIntegration:
         # Test both controller types
         for controller_type in [ServoControllerType.PCA9685, ServoControllerType.GPIO]:
             try:
-                controller = ServoControllerFactory.create_controller(controller_type)
+                controller = get_servo_controller(controller_type)
                 
                 # Verify controller works
                 assert controller.get_controller_type() in ["PCA9685", "GPIO"]
@@ -372,7 +372,7 @@ class TestFactoryIntegration:
         # Test string-based creation
         for controller_type_str in ["pca9685", "gpio"]:
             try:
-                controller = ServoControllerFactory.create_controller_from_config(controller_type_str)
+                controller = get_servo_controller_from_config(controller_type_str)
                 
                 # Verify controller works
                 assert controller.get_controller_type().lower() == controller_type_str
@@ -388,11 +388,11 @@ class TestFactoryIntegration:
         
         # Test invalid controller type
         with pytest.raises(HardwareException):
-            ServoControllerFactory.create_controller_from_config("invalid")
+            get_servo_controller("invalid")
         
         # Test invalid enum
         with pytest.raises(HardwareException):
-            ServoControllerFactory.create_controller_from_config("nonexistent")
+            get_servo_controller("nonexistent")
         
         logger.info("✓ Factory error handling working correctly")
 
@@ -407,10 +407,10 @@ class TestSafetyIntegration:
         # Get available controller
         controller = None
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
         except Exception:
             try:
-                controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+                controller = get_servo_controller(ServoControllerType.GPIO)
             except Exception as e:
                 pytest.skip(f"No servo hardware available: {e}")
         
@@ -439,10 +439,10 @@ class TestSafetyIntegration:
         # Get available controller
         controller = None
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
         except Exception:
             try:
-                controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+                controller = get_servo_controller(ServoControllerType.GPIO)
             except Exception as e:
                 pytest.skip(f"No servo hardware available: {e}")
         

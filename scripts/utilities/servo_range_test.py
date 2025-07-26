@@ -13,9 +13,9 @@ import os
 import time
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
-from raspibot.hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from raspibot.hardware.servo_selector import get_servo_controller, ServoControllerType
 from raspibot.utils.logging_config import setup_logging
 
 
@@ -31,7 +31,7 @@ def main():
     
     # Initialize servo controller
     try:
-        controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+        controller = get_servo_controller(ServoControllerType.PCA9685)
         logger.info("PCA9685 servo controller initialized")
         print("✅ PCA9685 servo controller initialized")
         

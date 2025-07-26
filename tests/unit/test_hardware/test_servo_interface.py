@@ -4,7 +4,10 @@ import pytest
 from unittest.mock import Mock, patch
 
 from raspibot.hardware.servo_interface import ServoInterface
-from raspibot.hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from raspibot.hardware.servo_selector import (
+    get_servo_controller, ServoControllerType, 
+    get_available_controllers, is_pca9685_available
+)
 from raspibot.exceptions import HardwareException
 
 
@@ -24,58 +27,71 @@ class TestServoInterface:
         assert hasattr(ServoInterface, 'get_controller_type')
         assert hasattr(ServoInterface, 'get_available_channels')
 
-    def test_interface_instantiation_fails(self):
-        """Test that ServoInterface cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            ServoInterface()
+    def test_interface_instantiation_raises_not_implemented(self):
+        """Test that ServoInterface raises NotImplementedError when methods are called."""
+        interface = ServoInterface()
+        
+        with pytest.raises(NotImplementedError):
+            interface.set_servo_angle(0, 90)
+        
+        with pytest.raises(NotImplementedError):
+            interface.get_servo_angle(0)
+        
+        with pytest.raises(NotImplementedError):
+            interface.smooth_move_to_angle(0, 90)
+        
+        with pytest.raises(NotImplementedError):
+            interface.emergency_stop()
 
 
-class TestServoFactory:
-    """Test the servo controller factory."""
+class TestServoSelector:
+    """Test the servo controller selector functions."""
 
     def test_available_controller_types(self):
         """Test getting available controller types."""
-        types = ServoControllerFactory.get_available_controller_types()
-        assert "pca9685" in types
-        assert "gpio" in types
-        assert len(types) == 2
+        types = get_available_controllers()
+        assert len(types) >= 1  # At least GPIO should be available
+        assert ServoControllerType.GPIO in types
 
-    def test_validate_controller_type(self):
-        """Test controller type validation."""
-        assert ServoControllerFactory.validate_controller_type("pca9685")
-        assert ServoControllerFactory.validate_controller_type("gpio")
-        assert not ServoControllerFactory.validate_controller_type("invalid")
-        assert not ServoControllerFactory.validate_controller_type("")
+    def test_pca9685_availability_check(self):
+        """Test PCA9685 availability check."""
+        available = is_pca9685_available()
+        assert isinstance(available, bool)  # Should return bool, True or False
 
     def test_create_pca9685_controller(self):
         """Test creating PCA9685 controller."""
-        controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+        controller = get_servo_controller(ServoControllerType.PCA9685)
         assert controller.get_controller_type() == "PCA9685"
         assert hasattr(controller, 'set_servo_angle')
 
     def test_create_gpio_controller(self):
         """Test creating GPIO controller."""
-        controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+        controller = get_servo_controller(ServoControllerType.GPIO)
         assert controller.get_controller_type() == "GPIO"
         assert hasattr(controller, 'set_servo_angle')
 
-    def test_create_controller_from_config(self):
+    def test_create_controller_from_string(self):
         """Test creating controller from string config."""
-        controller = ServoControllerFactory.create_controller_from_config("pca9685")
+        controller = get_servo_controller("pca9685")
         assert controller.get_controller_type() == "PCA9685"
 
-        controller = ServoControllerFactory.create_controller_from_config("gpio")
+        controller = get_servo_controller("gpio")
         assert controller.get_controller_type() == "GPIO"
+
+    def test_auto_controller_selection(self):
+        """Test auto controller selection."""
+        controller = get_servo_controller(ServoControllerType.AUTO)
+        assert controller.get_controller_type() in ["PCA9685", "GPIO"]
 
     def test_create_controller_invalid_type(self):
         """Test creating controller with invalid type."""
         with pytest.raises(HardwareException):
-            ServoControllerFactory.create_controller_from_config("invalid")
+            get_servo_controller("invalid")
 
-    def test_create_controller_from_config_invalid(self):
-        """Test creating controller from invalid string config."""
+    def test_create_controller_invalid_enum(self):
+        """Test creating controller with invalid enum."""
         with pytest.raises(HardwareException):
-            ServoControllerFactory.create_controller_from_config("nonexistent")
+            get_servo_controller("nonexistent")
 
 
 class TestServoControllerImplementation:

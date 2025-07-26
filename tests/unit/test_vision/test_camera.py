@@ -5,6 +5,7 @@ import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 
 from raspibot.vision.camera import Camera
+from raspibot.vision.basic_camera import BasicCamera
 
 
 class TestCamera:
@@ -258,3 +259,70 @@ class TestCamera:
         
         # Should have calculated FPS
         assert camera.get_fps() == 2.0 
+
+
+class TestBasicCamera:
+    """Test BasicCamera class functionality."""
+
+    @patch('raspibot.vision.basic_camera.Picamera2')
+    def test_basic_camera_initialization_normal_video(self, mock_picamera2):
+        """Test BasicCamera initialization in normal video mode."""
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        camera = BasicCamera(camera_mode="normal_video")
+        
+        assert camera.camera_mode == "normal_video"
+        assert camera.current_resolution == (1280, 720)
+        assert camera.current_format == "XBGR8888"
+        assert camera.current_mode == "color"
+
+    @patch('raspibot.vision.basic_camera.Picamera2')
+    def test_basic_camera_initialization_opencv_detection(self, mock_picamera2):
+        """Test BasicCamera initialization in OpenCV detection mode."""
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        camera = BasicCamera(camera_mode="opencv_detection")
+        
+        assert camera.camera_mode == "opencv_detection"
+        assert camera.current_resolution == (1280, 720)
+        assert camera.current_format == "XBGR8888"
+        assert camera.current_mode == "grayscale"
+
+    @patch('raspibot.vision.basic_camera.Picamera2')
+    def test_basic_camera_get_camera_mode_info(self, mock_picamera2):
+        """Test getting camera mode information."""
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        camera = BasicCamera(camera_mode="opencv_detection")
+        mode_info = camera.get_camera_mode_info()
+        
+        assert mode_info["camera_mode"] == "opencv_detection"
+        assert mode_info["detection"]["resolution"] == (1280, 720)
+        assert mode_info["detection"]["format"] == "XBGR8888"
+        assert mode_info["display"]["resolution"] == (1280, 720)
+        assert mode_info["display"]["format"] == "BGR"
+        assert mode_info["memory_mb_per_frame"] == 0.88  # Grayscale is more efficient
+
+    @patch('raspibot.vision.basic_camera.Picamera2')
+    def test_basic_camera_get_detection_frame(self, mock_picamera2):
+        """Test getting detection frame."""
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        camera = BasicCamera(camera_mode="opencv_detection")
+        camera.is_running = True
+        camera.picam2 = mock_picamera2_instance
+        
+        # Mock frame capture
+        mock_frame = np.zeros((720, 1280, 4), dtype=np.uint8)  # XBGR8888 format
+        mock_picamera2_instance.capture_array.return_value = mock_frame
+        
+        with patch('cv2.cvtColor') as mock_cvtcolor:
+            mock_cvtcolor.return_value = np.zeros((720, 1280), dtype=np.uint8)  # Grayscale
+            frame = camera.get_detection_frame()
+            
+            assert frame is not None
+            mock_cvtcolor.assert_called_once() 

@@ -1,4 +1,4 @@
-"""Unit tests for FaceTracker class."""
+"""Unit tests for FaceTracker class (refactored version)."""
 
 import pytest
 import numpy as np
@@ -9,7 +9,7 @@ from raspibot.vision.face_tracker import FaceTracker
 
 
 class TestFaceTracker:
-    """Test FaceTracker class functionality."""
+    """Test FaceTracker class functionality (refactored version)."""
 
     def setup_method(self):
         """Setup test fixtures."""
@@ -22,13 +22,10 @@ class TestFaceTracker:
         
         assert tracker.camera_width == 1280
         assert tracker.camera_height == 480
-        assert tracker.movement_threshold == 50
-        assert tracker.movement_scale == 0.3
-        assert tracker.stability_threshold == 100
-        assert tracker.stability_frames == 3
-        assert tracker.sleep_timeout == 300
+        assert tracker.sleep_timeout == 300  # From config
         assert tracker.is_sleeping is False
-        assert len(tracker.face_history) == 0
+        assert tracker.simple_tracker is not None
+        assert tracker.search_pattern_enabled is not None
 
     def test_face_tracker_custom_resolution(self):
         """Test face tracker with custom resolution."""
@@ -37,260 +34,189 @@ class TestFaceTracker:
         assert tracker.camera_width == 640
         assert tracker.camera_height == 360
 
-    @patch('raspibot.vision.face_tracker.FaceDetector')
-    def test_track_face_no_faces(self, mock_face_detector_class):
+    def test_track_face_no_faces(self):
         """Test tracking with no faces detected."""
-        mock_detector = Mock()
-        mock_detector.detect_faces.return_value = []
-        mock_detector.get_largest_face.return_value = None
-        mock_face_detector_class.return_value = mock_detector
-        
         tracker = FaceTracker(self.mock_pan_tilt)
+        
+        # Mock the simple tracker to return no faces
+        tracker.simple_tracker.track_face = Mock(return_value=(None, []))
+        
         frame = np.zeros((480, 1280, 3), dtype=np.uint8)
         
         stable_face, all_faces = tracker.track_face(frame)
         
         assert stable_face is None
         assert all_faces == []
+        tracker.simple_tracker.track_face.assert_called_once_with(frame)
 
-    @patch('raspibot.vision.face_tracker.FaceDetector')
-    @patch('time.time')
-    def test_track_face_stable_face(self, mock_time, mock_face_detector_class):
-        """Test tracking with stable face."""
-        mock_detector = Mock()
-        mock_detector.detect_faces.return_value = [(100, 100, 80, 80)]
-        mock_detector.get_largest_face.return_value = (100, 100, 80, 80)
-        mock_detector.get_face_center.return_value = (140, 140)
-        mock_face_detector_class.return_value = mock_detector
-        
-        # Mock time for stability check
-        mock_time.return_value = 1.0
-        
+    def test_track_face_with_stable_face(self):
+        """Test tracking with stable face detected."""
         tracker = FaceTracker(self.mock_pan_tilt)
-        frame = np.zeros((480, 1280, 3), dtype=np.uint8)
         
-        # Need multiple frames for stability
-        for i in range(4):
-            mock_time.return_value = 1.0 + i * 0.1
-            stable_face, all_faces = tracker.track_face(frame)
-        
-        assert stable_face == (100, 100, 80, 80)
-        assert all_faces == [(100, 100, 80, 80)]
-
-    @patch('raspibot.vision.face_tracker.FaceDetector')
-    @patch('time.time')
-    def test_track_face_unstable_face(self, mock_time, mock_face_detector_class):
-        """Test tracking with unstable (moving) face."""
-        mock_detector = Mock()
-        # Simulate moving face
-        mock_detector.detect_faces.side_effect = [
-            [(100, 100, 80, 80)],
-            [(250, 250, 80, 80)],  # Moved too far
-        ]
-        mock_detector.get_largest_face.side_effect = [
-            (100, 100, 80, 80),
-            (250, 250, 80, 80),
-        ]
-        mock_detector.get_face_center.side_effect = [
-            (140, 140),
-            (290, 290),
-        ]
-        mock_face_detector_class.return_value = mock_detector
-        
-        mock_time.return_value = 1.0
-        
-        tracker = FaceTracker(self.mock_pan_tilt)
-        frame = np.zeros((480, 1280, 3), dtype=np.uint8)
-        
-        # First frame
-        stable_face, all_faces = tracker.track_face(frame)
-        assert stable_face is None  # Not enough frames for stability
-        
-        # Second frame with moved face
-        mock_time.return_value = 1.1
-        stable_face, all_faces = tracker.track_face(frame)
-        assert stable_face is None  # Face moved too much
-
-    @patch('raspibot.vision.face_tracker.FaceDetector')
-    @patch('time.time')
-    def test_sleep_mode_activation(self, mock_time, mock_face_detector_class):
-        """Test sleep mode activation after timeout."""
-        mock_detector = Mock()
-        mock_detector.detect_faces.return_value = []
-        mock_detector.get_largest_face.return_value = None
-        mock_face_detector_class.return_value = mock_detector
-        
-        # Set initial time
-        mock_time.return_value = 1000.0
-        
-        tracker = FaceTracker(self.mock_pan_tilt)
-        tracker.sleep_timeout = 5  # Short timeout for testing
-        frame = np.zeros((480, 1280, 3), dtype=np.uint8)
-        
-        # First call - no sleep yet
-        stable_face, all_faces = tracker.track_face(frame)
-        assert tracker.is_sleeping is False
-        
-        # Move time forward past timeout
-        mock_time.return_value = 1006.0
-        stable_face, all_faces = tracker.track_face(frame)
-        assert tracker.is_sleeping is True
-        
-        # Verify sleep sequence was called
-        assert self.mock_pan_tilt.move_to_coordinates.call_count >= 4
-
-    @patch('raspibot.vision.face_tracker.FaceDetector')
-    @patch('time.time')
-    def test_wake_up_from_sleep(self, mock_time, mock_face_detector_class):
-        """Test waking up from sleep when face detected."""
-        mock_detector = Mock()
-        mock_detector.get_face_center.return_value = (140, 140)
-        mock_face_detector_class.return_value = mock_detector
-        
-        tracker = FaceTracker(self.mock_pan_tilt)
-        tracker.is_sleeping = True  # Start in sleep mode
-        
-        # Mock stable face detection
-        mock_detector.detect_faces.return_value = [(100, 100, 80, 80)]
-        mock_detector.get_largest_face.return_value = (100, 100, 80, 80)
-        mock_time.return_value = 1.0
+        # Mock the simple tracker to return a stable face
+        test_face = (100, 100, 50, 50)
+        all_faces = [test_face]
+        tracker.simple_tracker.track_face = Mock(return_value=(test_face, all_faces))
         
         frame = np.zeros((480, 1280, 3), dtype=np.uint8)
         
-        # Need multiple frames for stability
-        for i in range(4):
-            mock_time.return_value = 1.0 + i * 0.1
-            stable_face, all_faces = tracker.track_face(frame)
+        stable_face, detected_faces = tracker.track_face(frame)
         
-        assert tracker.is_sleeping is False
-        # Verify wake sequence was called
-        assert self.mock_pan_tilt.move_to_coordinates.call_count >= 4
+        assert stable_face == test_face
+        assert detected_faces == all_faces
+        tracker.simple_tracker.track_face.assert_called_once_with(frame)
 
-    def test_get_stable_faces(self):
-        """Test getting list of stable faces."""
+    def test_track_face_wakes_up_from_sleep(self):
+        """Test that detecting a face wakes up from sleep mode."""
+        tracker = FaceTracker(self.mock_pan_tilt)
+        tracker.is_sleeping = True
+        
+        # Mock wake up method
+        tracker._wake_up = Mock()
+        
+        # Mock the simple tracker to return a stable face
+        test_face = (100, 100, 50, 50)
+        tracker.simple_tracker.track_face = Mock(return_value=(test_face, [test_face]))
+        
+        frame = np.zeros((480, 1280, 3), dtype=np.uint8)
+        
+        stable_face, all_faces = tracker.track_face(frame)
+        
+        assert stable_face == test_face
+        tracker._wake_up.assert_called_once()
+
+    def test_sleep_functionality(self):
+        """Test sleep mode functionality."""
         tracker = FaceTracker(self.mock_pan_tilt)
         
-        # Mock face history with stable face
-        tracker.face_history = [
-            (1.0, (140, 140), (100, 100, 80, 80)),
-            (1.1, (142, 142), (100, 100, 80, 80)),
-            (1.2, (141, 141), (100, 100, 80, 80)),
-        ]
+        assert tracker.get_sleep_status() is False
         
-        all_faces = [(100, 100, 80, 80), (300, 300, 60, 60)]
-        stable_faces = tracker.get_stable_faces(all_faces)
+        tracker.force_sleep()
         
-        assert len(stable_faces) <= len(all_faces)
+        assert tracker.get_sleep_status() is True
+        # Should have called move_to_coordinates for sleep sequence
+        assert self.mock_pan_tilt.move_to_coordinates.call_count > 0
 
-    def test_center_on_face_significant_offset(self):
-        """Test centering on face with significant offset."""
-        tracker = FaceTracker(self.mock_pan_tilt, 1280, 480)
-        
-        with patch.object(tracker.face_detector, 'get_face_center', return_value=(100, 100)):
-            tracker._center_on_face((50, 50, 100, 100))
-        
-        # Should have called move_to_coordinates due to significant offset
-        self.mock_pan_tilt.move_to_coordinates.assert_called_once()
-
-    def test_center_on_face_small_offset(self):
-        """Test centering on face with small offset (below threshold)."""
-        tracker = FaceTracker(self.mock_pan_tilt, 1280, 480)
-        
-        # Center of frame is (640, 240), face center at (650, 250) - small offset
-        with patch.object(tracker.face_detector, 'get_face_center', return_value=(650, 250)):
-            tracker._center_on_face((600, 200, 100, 100))
-        
-        # Should not move due to small offset
-        self.mock_pan_tilt.move_to_coordinates.assert_not_called()
-
-    def test_force_wake_up(self):
-        """Test force wake up functionality."""
+    def test_wake_functionality(self):
+        """Test wake up functionality."""
         tracker = FaceTracker(self.mock_pan_tilt)
         tracker.is_sleeping = True
         
         tracker.force_wake_up()
         
-        assert tracker.is_sleeping is False
-        # Verify wake sequence was called
-        assert self.mock_pan_tilt.move_to_coordinates.call_count >= 4
-
-    def test_force_sleep(self):
-        """Test force sleep functionality."""
-        tracker = FaceTracker(self.mock_pan_tilt)
-        tracker.is_sleeping = False
-        
-        tracker.force_sleep()
-        
-        assert tracker.is_sleeping is True
-        # Verify sleep sequence was called
-        assert self.mock_pan_tilt.move_to_coordinates.call_count >= 4
-
-    def test_get_sleep_status(self):
-        """Test get sleep status."""
-        tracker = FaceTracker(self.mock_pan_tilt)
-        
         assert tracker.get_sleep_status() is False
-        
-        tracker.is_sleeping = True
-        assert tracker.get_sleep_status() is True
+        # Should have called move_to_coordinates for wake sequence
+        assert self.mock_pan_tilt.move_to_coordinates.call_count > 0
 
-    @patch('time.time')
-    def test_reset_sleep_timer(self, mock_time):
-        """Test reset sleep timer."""
-        mock_time.return_value = 1000.0
-        
+    def test_sleep_timer_management(self):
+        """Test sleep timer management."""
         tracker = FaceTracker(self.mock_pan_tilt)
+        
+        # Set a specific time
+        test_time = time.time() - 100
+        tracker.simple_tracker.last_face_time = test_time
+        
+        time_until_sleep = tracker.get_time_until_sleep()
+        
+        # Should be sleep_timeout - 100 seconds
+        expected = tracker.sleep_timeout - 100
+        assert abs(time_until_sleep - expected) < 1.0
+
+    def test_reset_sleep_timer(self):
+        """Test resetting the sleep timer."""
+        tracker = FaceTracker(self.mock_pan_tilt)
+        
+        old_time = tracker.simple_tracker.last_face_time
+        time.sleep(0.01)  # Small delay
+        
         tracker.reset_sleep_timer()
         
-        assert tracker.last_face_time == 1000.0
+        assert tracker.simple_tracker.last_face_time > old_time
 
-    @patch('time.time')
-    def test_get_time_until_sleep(self, mock_time):
-        """Test get time until sleep."""
+    def test_get_stable_faces_delegation(self):
+        """Test that get_stable_faces delegates to simple tracker."""
         tracker = FaceTracker(self.mock_pan_tilt)
-        tracker.sleep_timeout = 300
-        tracker.last_face_time = 1000.0
         
-        # 100 seconds elapsed, 200 remaining
-        mock_time.return_value = 1100.0
-        remaining = tracker.get_time_until_sleep()
-        assert remaining == 200.0
+        all_faces = [(100, 100, 50, 50), (200, 200, 60, 60)]
+        expected_stable = [(100, 100, 50, 50)]
         
-        # Past timeout
-        mock_time.return_value = 1400.0
-        remaining = tracker.get_time_until_sleep()
-        assert remaining == 0.0
+        tracker.simple_tracker.get_stable_faces = Mock(return_value=expected_stable)
         
-        # Already sleeping
+        result = tracker.get_stable_faces(all_faces)
+        
+        assert result == expected_stable
+        tracker.simple_tracker.get_stable_faces.assert_called_once_with(all_faces)
+
+    @patch('raspibot.vision.face_tracker.SearchPattern')
+    def test_search_pattern_initialization(self, mock_search_pattern_class):
+        """Test search pattern initialization when enabled."""
+        # Mock search pattern enabled
+        with patch('raspibot.vision.face_tracker.SEARCH_PATTERN_ENABLED', True):
+            tracker = FaceTracker(self.mock_pan_tilt)
+            
+            assert tracker.search_pattern is not None
+            mock_search_pattern_class.assert_called_once()
+
+    def test_search_pattern_disabled(self):
+        """Test behavior when search pattern is disabled."""
+        # Mock search pattern disabled
+        with patch('raspibot.vision.face_tracker.SEARCH_PATTERN_ENABLED', False):
+            tracker = FaceTracker(self.mock_pan_tilt)
+            
+            status = tracker.get_search_status()
+            
+            assert status["enabled"] is False
+            assert status["active"] is False
+
+    def test_search_interval_setting(self):
+        """Test setting search interval."""
+        tracker = FaceTracker(self.mock_pan_tilt)
+        
+        tracker.set_search_interval(60.0)
+        
+        assert tracker.search_interval == 60.0
+
+    def test_search_interval_minimum(self):
+        """Test search interval minimum value enforcement."""
+        tracker = FaceTracker(self.mock_pan_tilt)
+        
+        tracker.set_search_interval(1.0)  # Below minimum
+        
+        assert tracker.search_interval == 5.0  # Should be set to minimum
+
+    def test_auto_sleep_after_timeout(self):
+        """Test automatic sleep after timeout period."""
+        tracker = FaceTracker(self.mock_pan_tilt)
+        tracker._go_to_sleep = Mock()
+        
+        # Set last face time to long ago
+        tracker.simple_tracker.last_face_time = time.time() - (tracker.sleep_timeout + 10)
+        
+        # Mock simple tracker to return no faces
+        tracker.simple_tracker.track_face = Mock(return_value=(None, []))
+        
+        frame = np.zeros((480, 1280, 3), dtype=np.uint8)
+        
+        stable_face, all_faces = tracker.track_face(frame)
+        
+        assert stable_face is None
+        tracker._go_to_sleep.assert_called_once()
+
+    def test_no_auto_sleep_when_already_sleeping(self):
+        """Test that auto sleep doesn't trigger when already sleeping."""
+        tracker = FaceTracker(self.mock_pan_tilt)
         tracker.is_sleeping = True
-        remaining = tracker.get_time_until_sleep()
-        assert remaining == 0.0
-
-    def test_calculate_distance(self):
-        """Test distance calculation between points."""
-        tracker = FaceTracker(self.mock_pan_tilt)
+        tracker._go_to_sleep = Mock()
         
-        # Test distance calculation
-        distance = tracker._calculate_distance((0, 0), (3, 4))
-        assert distance == 5.0  # 3-4-5 triangle
+        # Set last face time to long ago
+        tracker.simple_tracker.last_face_time = time.time() - (tracker.sleep_timeout + 10)
         
-        distance = tracker._calculate_distance((100, 100), (100, 100))
-        assert distance == 0.0  # Same point
-
-    @patch('time.time')
-    def test_cleanup_face_history(self, mock_time):
-        """Test cleanup of old face history."""
-        tracker = FaceTracker(self.mock_pan_tilt)
+        # Mock simple tracker to return no faces
+        tracker.simple_tracker.track_face = Mock(return_value=(None, []))
         
-        # Add old and new history
-        tracker.face_history = [
-            (1.0, (140, 140), (100, 100, 80, 80)),  # Old
-            (4.5, (142, 142), (100, 100, 80, 80)),  # Recent
-        ]
+        frame = np.zeros((480, 1280, 3), dtype=np.uint8)
         
-        mock_time.return_value = 5.0
-        tracker._cleanup_face_history()
+        tracker.track_face(frame)
         
-        # Should keep only recent history (within 2 seconds)
-        assert len(tracker.face_history) == 1
-        assert tracker.face_history[0][0] == 4.5 
+        # Should not call _go_to_sleep since already sleeping
+        tracker._go_to_sleep.assert_not_called() 

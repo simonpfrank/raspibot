@@ -70,7 +70,7 @@ class FaceDetector:
         Detect faces in frame using YuNet DNN model.
         
         Args:
-            frame: Input image as numpy array (BGR format)
+            frame: Input image as numpy array (BGR or RGBA format)
             
         Returns:
             List of face rectangles as (x, y, w, h) tuples
@@ -82,6 +82,15 @@ class FaceDetector:
             height, width = frame.shape[:2]
             input_size = (width, height)
             
+            # Convert RGBA to BGR if needed (Pi AI camera returns RGBA)
+            if frame.shape[2] == 4:
+                # RGBA to BGR conversion
+                frame_bgr = frame[:, :, :3]  # Remove alpha channel
+                # Note: Pi AI camera returns RGBA, but we need BGR for OpenCV
+                # The channels are already in the right order for BGR
+            else:
+                frame_bgr = frame
+            
             # Set input size if it has changed
             if self._current_input_size != input_size:
                 self.detector.setInputSize(input_size)
@@ -89,7 +98,7 @@ class FaceDetector:
                 self.logger.debug(f"Set YuNet input size to: {input_size}")
             
             # Detect faces
-            _, faces = self.detector.detect(frame)
+            _, faces = self.detector.detect(frame_bgr)
             
             face_list = []
             if faces is not None:

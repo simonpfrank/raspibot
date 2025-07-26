@@ -7,7 +7,7 @@ from typing import Optional
 
 from raspibot.vision.pi_ai_camera import PiAICamera, PICAMERA2_AVAILABLE
 from raspibot.vision.detection_models import PersonDetection
-from raspibot.vision.camera_factory import CameraFactory, CameraType
+from raspibot.vision.camera_selector import get_camera, CameraType, is_pi_ai_available, get_available_cameras, get_recommended_camera
 
 
 class TestPiAICamera:
@@ -409,18 +409,106 @@ class TestPiAICamera:
         assert "max_detections" in info
         assert "inference_rate" in info
 
+    @patch('raspibot.vision.pi_ai_camera.PICAMERA2_AVAILABLE', True)
+    @patch('raspibot.vision.pi_ai_camera.IMX500')
+    @patch('raspibot.vision.pi_ai_camera.Picamera2')
+    def test_initialization_with_camera_mode(self, mock_picamera2, mock_imx500):
+        """Test initialization with camera mode parameter."""
+        # Mock IMX500 and intrinsics
+        mock_intrinsics = Mock()
+        mock_intrinsics.task = "object detection"
+        mock_intrinsics.labels = None
+        mock_intrinsics.confidence_threshold = 0.55
+        mock_intrinsics.iou_threshold = 0.65
+        mock_intrinsics.max_detections = 10
+        mock_intrinsics.inference_rate = 30
+        mock_intrinsics.update_with_defaults = Mock()
+        
+        mock_imx500_instance = Mock()
+        mock_imx500_instance.network_intrinsics = mock_intrinsics
+        mock_imx500_instance.camera_num = 0
+        mock_imx500.return_value = mock_imx500_instance
+        
+        # Mock Picamera2
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        # Test initialization with camera mode
+        camera = PiAICamera(camera_mode="ai_detection")
+        
+        assert camera.camera_mode == "ai_detection"
+        assert camera.detection_resolution == (1920, 1080)
+        assert camera.detection_format == "YUV420"
+        assert camera.display_resolution == (1280, 720)
+        assert camera.display_format == "BGR"
+
+    @patch('raspibot.vision.pi_ai_camera.PICAMERA2_AVAILABLE', True)
+    @patch('raspibot.vision.pi_ai_camera.IMX500')
+    @patch('raspibot.vision.pi_ai_camera.Picamera2')
+    def test_initialization_invalid_camera_mode(self, mock_picamera2, mock_imx500):
+        """Test initialization with invalid camera mode."""
+        # Mock IMX500 and intrinsics
+        mock_intrinsics = Mock()
+        mock_intrinsics.task = "object detection"
+        mock_intrinsics.labels = None
+        mock_intrinsics.update_with_defaults = Mock()
+        
+        mock_imx500_instance = Mock()
+        mock_imx500_instance.network_intrinsics = mock_intrinsics
+        mock_imx500_instance.camera_num = 0
+        mock_imx500.return_value = mock_imx500_instance
+        
+        # Mock Picamera2
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        # Test with invalid camera mode
+        with pytest.raises(ValueError, match="Invalid camera mode"):
+            PiAICamera(camera_mode="invalid_mode")
+
+    @patch('raspibot.vision.pi_ai_camera.PICAMERA2_AVAILABLE', True)
+    @patch('raspibot.vision.pi_ai_camera.IMX500')
+    @patch('raspibot.vision.pi_ai_camera.Picamera2')
+    def test_get_camera_mode_info(self, mock_picamera2, mock_imx500):
+        """Test getting camera mode information."""
+        # Mock IMX500 and intrinsics
+        mock_intrinsics = Mock()
+        mock_intrinsics.task = "object detection"
+        mock_intrinsics.labels = None
+        mock_intrinsics.update_with_defaults = Mock()
+        
+        mock_imx500_instance = Mock()
+        mock_imx500_instance.network_intrinsics = mock_intrinsics
+        mock_imx500_instance.camera_num = 0
+        mock_imx500.return_value = mock_imx500_instance
+        
+        # Mock Picamera2
+        mock_picamera2_instance = Mock()
+        mock_picamera2.return_value = mock_picamera2_instance
+        
+        # Test camera mode info
+        camera = PiAICamera(camera_mode="opencv_detection")
+        mode_info = camera.get_camera_mode_info()
+        
+        assert mode_info["camera_mode"] == "opencv_detection"
+        assert mode_info["detection"]["resolution"] == (1280, 720)
+        assert mode_info["detection"]["format"] == "grayscale"
+        assert mode_info["display"]["resolution"] == (1280, 720)
+        assert mode_info["display"]["format"] == "BGR"
+        assert "memory_mb_per_frame" in mode_info
+
 
 class TestCameraFactory:
     """Test camera factory functionality."""
     
     def test_create_camera_auto_with_pi_ai_available(self):
         """Test auto camera creation when Pi AI is available."""
-        with patch.object(CameraFactory, 'is_pi_ai_available', return_value=True):
+        with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=True):
             with patch('raspibot.vision.pi_ai_camera.PiAICamera') as mock_pi_ai:
                 mock_camera = Mock()
                 mock_pi_ai.return_value = mock_camera
     
-                camera = CameraFactory.create_camera(CameraType.AUTO)
+                camera = get_camera(CameraType.AUTO)
     
                 # Check that the camera is the right type, not necessarily the same object
                 assert isinstance(camera, type(mock_camera))
@@ -428,12 +516,12 @@ class TestCameraFactory:
     
     def test_create_camera_auto_with_pi_ai_unavailable(self):
         """Test auto camera creation when Pi AI is unavailable."""
-        with patch.object(CameraFactory, 'is_pi_ai_available', return_value=False):
+        with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=False):
             with patch('raspibot.vision.camera.Camera') as mock_webcam:
                 mock_camera = Mock()
                 mock_webcam.return_value = mock_camera
     
-                camera = CameraFactory.create_camera(CameraType.AUTO)
+                camera = get_camera(CameraType.AUTO)
     
                 # Check that the camera is the right type, not necessarily the same object
                 assert isinstance(camera, type(mock_camera))
@@ -445,7 +533,7 @@ class TestCameraFactory:
             mock_camera = Mock()
             mock_webcam.return_value = mock_camera
     
-            camera = CameraFactory.create_camera(CameraType.WEBCAM)
+            camera = get_camera(CameraType.WEBCAM)
     
             # Check that the camera is the right type, not necessarily the same object
             assert isinstance(camera, type(mock_camera))
@@ -457,7 +545,7 @@ class TestCameraFactory:
             mock_camera = Mock()
             mock_pi_ai.return_value = mock_camera
             
-            camera = CameraFactory.create_camera(CameraType.PI_AI)
+            camera = get_camera(CameraType.PI_AI)
             
             # Check that the camera is the right type, not necessarily the same object
             assert isinstance(camera, type(mock_camera))
@@ -466,7 +554,7 @@ class TestCameraFactory:
     def test_create_camera_invalid_type(self):
         """Test camera creation with invalid type."""
         with pytest.raises(ValueError, match="Invalid camera type"):
-            CameraFactory.create_camera("invalid")
+            get_camera("invalid")
     
     def test_is_pi_ai_available_true(self):
         """Test Pi AI availability check when available."""
@@ -475,7 +563,7 @@ class TestCameraFactory:
             mock_camera.stop = Mock()
             mock_pi_ai.return_value = mock_camera
             
-            result = CameraFactory.is_pi_ai_available()
+            result = is_pi_ai_available()
             
             # Since we're mocking PiAICamera, it should return True
             assert result is True
@@ -484,14 +572,14 @@ class TestCameraFactory:
     def test_is_pi_ai_available_false(self):
         """Test Pi AI availability check when unavailable."""
         with patch('raspibot.vision.pi_ai_camera.PiAICamera', side_effect=ImportError):
-            result = CameraFactory.is_pi_ai_available()
+            result = is_pi_ai_available()
             
             assert result is False
     
     def test_get_available_cameras(self):
         """Test getting available camera types."""
-        with patch.object(CameraFactory, 'is_pi_ai_available', return_value=True):
-            available = CameraFactory.get_available_cameras()
+        with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=True):
+            available = get_available_cameras()
             
             assert CameraType.WEBCAM in available
             assert CameraType.PI_AI in available
@@ -499,14 +587,14 @@ class TestCameraFactory:
     
     def test_get_recommended_camera_pi_ai(self):
         """Test getting recommended camera when Pi AI is available."""
-        with patch.object(CameraFactory, 'is_pi_ai_available', return_value=True):
-            recommended = CameraFactory.get_recommended_camera()
+        with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=True):
+            recommended = get_recommended_camera()
             
             assert recommended == CameraType.PI_AI
     
     def test_get_recommended_camera_webcam(self):
         """Test getting recommended camera when Pi AI is unavailable."""
-        with patch.object(CameraFactory, 'is_pi_ai_available', return_value=False):
-            recommended = CameraFactory.get_recommended_camera()
+        with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=False):
+            recommended = get_recommended_camera()
             
             assert recommended == CameraType.WEBCAM 

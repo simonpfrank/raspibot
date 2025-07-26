@@ -103,6 +103,22 @@ class Camera(CameraInterface):
             self.logger.error(f"Error capturing frame: {e}")
             return None
     
+    def set_resolution(self, width: int, height: int) -> None:
+        """
+        Set camera resolution.
+        
+        Args:
+            width: Target width in pixels
+            height: Target height in pixels
+        """
+        if self.is_running:
+            self.logger.warning("Cannot change resolution while camera is running")
+            return
+        
+        self.width = width
+        self.height = height
+        self.logger.info(f"Resolution set to {width}x{height}")
+    
     def get_resolution(self) -> Tuple[int, int]:
         """
         Get current camera resolution.

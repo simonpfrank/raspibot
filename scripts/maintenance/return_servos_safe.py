@@ -8,9 +8,9 @@ import os
 import time
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
-from raspibot.hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from raspibot.hardware.servo_selector import get_servo_controller, ServoControllerType
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     
     try:
         # Initialize servo controller
-        controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+        controller = get_servo_controller(ServoControllerType.PCA9685)
         
         # Return to safe positions
         print("Setting pan servo to 90° (center)...")

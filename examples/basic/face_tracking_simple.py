@@ -7,14 +7,14 @@ import time
 import numpy as np
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from raspibot.vision.camera import Camera
 from raspibot.vision.face_detector import FaceDetector
 from raspibot.vision.face_tracker import FaceTracker
 from raspibot.vision.display import Display
 from raspibot.core.face_tracking_robot import FaceTrackingRobot
-from raspibot.hardware.servo_factory import ServoControllerFactory, ServoControllerType
+from raspibot.hardware.servo_selector import get_servo_controller, ServoControllerType
 from raspibot.movement.pan_tilt import PanTiltSystem
 
 
@@ -57,7 +57,7 @@ def test_components():
     try:
         # Try PCA9685
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.PCA9685)
+            controller = get_servo_controller(ServoControllerType.PCA9685)
             print("   ✅ PCA9685 controller available")
             controller.shutdown()
         except Exception:
@@ -65,7 +65,7 @@ def test_components():
         
         # Try GPIO
         try:
-            controller = ServoControllerFactory.create_controller(ServoControllerType.GPIO)
+            controller = get_servo_controller(ServoControllerType.GPIO)
             print("   ✅ GPIO controller available")
             controller.shutdown()
         except Exception:
@@ -131,7 +131,7 @@ def test_integration():
         from unittest.mock import Mock, patch
         
         # Mock servo controller
-        with patch('raspibot.hardware.servo_factory.ServoControllerFactory.create_controller') as mock_factory:
+        with patch('raspibot.hardware.servo_selector.get_servo_controller') as mock_factory:
             mock_controller = Mock()
             mock_controller.get_controller_type.return_value = "Mock"
             mock_controller.get_available_channels.return_value = [0, 1]
