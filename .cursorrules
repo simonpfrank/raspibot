@@ -10,6 +10,8 @@
 - **Raspberry Pi 5** with Raspbery Pi OS Bookworm (debian 12)
 - **Python Version:** Python 3.11.2
 - **Dependency Management:** pip 
+- **Virtual Environment name:** `.venv`
+- **Package installation** you do NOT install packages you ask me to.
 - **Code Formatting:** `black` (replaces  `flake8`)
 - **imports sorting** yse `isort`
 - **Type Hinting:** Strictly use the `typing` module. All functions, methods, and class members must have type annotations.

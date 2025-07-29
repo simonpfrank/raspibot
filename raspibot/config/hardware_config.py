@@ -28,7 +28,7 @@ SERVO_PAN_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
 
 # Tilt servo pulse width calibration (ms)
 SERVO_TILT_0_PULSE: Final[float] = 0.4    # 0°
-SERVO_TILT_90_PULSE: Final[float] = 1.45  # 90°
+SERVO_TILT_90_PULSE: Final[float] = 1.4   # 90° (corrected)
 SERVO_TILT_180_PULSE: Final[float] = 2.47 # 180°
 SERVO_TILT_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
 

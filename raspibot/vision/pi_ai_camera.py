@@ -140,18 +140,30 @@ class PiAICamera(CameraInterface):
             
             # Create configuration based on camera mode
             if self.camera_mode == "ai_detection":
-                # AI detection mode: use YUV420 format for detection
+                # AI detection mode: use YUV420 format for detection with IMX500 inference
                 config = self.picam2.create_preview_configuration(
                     main={"size": self.detection_resolution, "format": "YUV420"},
-                    encode="main",
-                    buffer_count=4
+                    controls={"FrameRate": self.inference_rate}, 
+                    buffer_count=12
                 )
+                
+                # Enable IMX500 neural network inference
+                self.imx500.show_network_fw_progress_bar()
+                
+                # Start camera with AI inference enabled
+                self.picam2.start(config, show_preview=False)
+                
+                # Set up IMX500 for inference
+                if self.intrinsics.preserve_aspect_ratio:
+                    self.imx500.set_auto_aspect_ratio()
+                    
             elif self.camera_mode == "opencv_detection":
                 # OpenCV detection mode: use grayscale format
                 config = self.picam2.create_preview_configuration(
                     main={"size": self.detection_resolution, "format": "XBGR8888"},
                     buffer_count=4
                 )
+                self.picam2.start(config, show_preview=False)
             else:
                 # Normal video mode: use standard color format
                 config = self.picam2.create_preview_configuration(
@@ -159,18 +171,13 @@ class PiAICamera(CameraInterface):
                     controls={"FrameRate": self.inference_rate}, 
                     buffer_count=12
                 )
+                self.picam2.start(config, show_preview=False)
             
             # Log the actual configuration being applied
             self.logger.info(f"Camera config main size: {config['main']['size']}")
             self.logger.info(f"Camera config main format: {config['main']['format']}")
             self.logger.info(f"Detection resolution: {self.detection_resolution}")
             self.logger.info(f"Display resolution: {self.display_resolution}")
-            
-            # Show network firmware progress
-            self.imx500.show_network_fw_progress_bar()
-            
-            # Start camera (disable preview for headless operation)
-            self.picam2.start(config, show_preview=False)
             
             # Log actual camera configuration after start
             try:
@@ -179,10 +186,6 @@ class PiAICamera(CameraInterface):
                 self.logger.info(f"Actual camera format after start: {actual_config['main']['format']}")
             except Exception as e:
                 self.logger.warning(f"Could not get actual camera config: {e}")
-            
-            # Set aspect ratio if needed
-            if self.intrinsics.preserve_aspect_ratio:
-                self.imx500.set_auto_aspect_ratio()
             
             self.is_running = True
             self.fps_start_time = time.time()
@@ -212,6 +215,13 @@ class PiAICamera(CameraInterface):
             
             if frame is not None:
                 self._update_fps()
+                
+                # Debug: Check if metadata contains inference results
+                if self.camera_mode == "ai_detection" and self.last_metadata:
+                    has_inference = any("inference" in str(key).lower() or "tensor" in str(key).lower() 
+                                      for key in self.last_metadata.keys())
+                    print(f"[DEBUG] Metadata keys: {list(self.last_metadata.keys())}")
+                    print(f"[DEBUG] Has inference data: {has_inference}")
                 
                 # Convert to BGR format for display based on camera mode
                 import cv2
@@ -510,10 +520,13 @@ class PiAICamera(CameraInterface):
             List of PersonDetection objects
         """
         if self.last_metadata is None:
+            print("[DEBUG] No metadata available for detection")
             return []
         
         try:
+            print(f"[DEBUG] Processing metadata for detection: {type(self.last_metadata)}")
             detections = self._parse_detections(self.last_metadata)
+            self.last_detections = detections  # Cache the results
             return detections
         except Exception as e:
             self.logger.error(f"Error parsing detections: {e}")
@@ -527,7 +540,15 @@ class PiAICamera(CameraInterface):
             if np_outputs is None:
                 return self.last_detections
             
+            # Debug: Print raw AI outputs
+            print(f"Raw AI outputs: {len(np_outputs)} arrays")
+            for i, output in enumerate(np_outputs):
+                print(f"  Output {i}: shape={output.shape}, type={output.dtype}")
+                if output.size > 0:
+                    print(f"    Sample values: {output.flatten()[:10]}")
+            
             input_w, input_h = self.imx500.get_input_size()
+            print(f"AI model input size: {input_w}x{input_h}")
             
             # Parse based on postprocessing type
             if self.intrinsics.postprocess == "nanodet":
@@ -541,41 +562,74 @@ class PiAICamera(CameraInterface):
                 from picamera2.devices.imx500.postprocess import scale_boxes
                 boxes = scale_boxes(boxes, 1, 1, input_h, input_w, False, False)
             else:
-                boxes, scores, classes = np_outputs[0][0], np_outputs[1][0], np_outputs[2][0]
+                # Extract boxes, scores, and classes from outputs
+                boxes = np_outputs[0][0]  # shape: (100, 4) - bounding boxes
+                scores = np_outputs[1][0]  # shape: (100,) - confidence scores
+                classes = np_outputs[2][0]  # shape: (100,) - class IDs
                 
+                # Filter by confidence threshold
+                valid_indices = scores > self.confidence_threshold
+                boxes = boxes[valid_indices]
+                scores = scores[valid_indices]
+                classes = classes[valid_indices]
+                
+                print(f"After filtering: {len(boxes)} valid detections")
+                
+                # Convert normalized coordinates to pixel coordinates
                 if self.intrinsics.bbox_normalization:
-                    boxes = boxes / input_h
+                    boxes = boxes * np.array([input_w, input_h, input_w, input_h])
                 
+                # Ensure boxes are in (x, y, w, h) format
                 if self.intrinsics.bbox_order == "xy":
-                    boxes = boxes[:, [1, 0, 3, 2]]
+                    # Convert from (x1, y1, x2, y2) to (x, y, w, h)
+                    boxes[:, 2] = boxes[:, 2] - boxes[:, 0]  # width = x2 - x1
+                    boxes[:, 3] = boxes[:, 3] - boxes[:, 1]  # height = y2 - y1
                 
-                boxes = np.array_split(boxes, 4, axis=1)
-                boxes = zip(*boxes)
+                # Scale bounding boxes from detection resolution to display resolution
+                # Get actual camera resolution
+                camera_resolution = self.get_resolution()
+                display_w, display_h = camera_resolution
+                
+                # AI detection resolution (this is what the model was trained on)
+                detection_w, detection_h = input_w, input_h
+                
+                scale_x = display_w / detection_w
+                scale_y = display_h / detection_h
+                
+                print(f"Scaling: detection={detection_w}x{detection_h} -> display={display_w}x{display_h}")
+                print(f"Scale factors: x={scale_x:.2f}, y={scale_y:.2f}")
+                
+                boxes[:, 0] = boxes[:, 0] * scale_x  # x
+                boxes[:, 1] = boxes[:, 1] * scale_y  # y
+                boxes[:, 2] = boxes[:, 2] * scale_x  # width
+                boxes[:, 3] = boxes[:, 3] * scale_y  # height
             
             # Convert to PersonDetection objects
             detections = []
             labels = self._get_labels()
             
-            for box, score, category in zip(boxes, scores, classes):
-                if score > self.confidence_threshold:
-                    # Convert box to (x, y, w, h) format
-                    if isinstance(box, (list, tuple)):
-                        x, y, w, h = box
-                    else:
-                        x, y, w, h = box[0], box[1], box[2] - box[0], box[3] - box[1]
-                    
-                    # Ensure positive dimensions
-                    x, y = max(0, int(x)), max(0, int(y))
-                    w, h = max(1, int(w)), max(1, int(h))
-                    
-                    category_name = labels[int(category)] if int(category) < len(labels) else "unknown"
-                    
-                    detection = PersonDetection(
-                        bbox=(x, y, w, h),
-                        confidence=float(score),
-                        category=category_name
-                    )
-                    detections.append(detection)
+            for i in range(len(boxes)):
+                box = boxes[i]
+                score = scores[i]
+                category = classes[i]
+                
+                # Box is already in (x, y, w, h) format
+                x, y, w, h = box
+                
+                # Ensure positive dimensions
+                x, y = max(0, int(x)), max(0, int(y))
+                w, h = max(1, int(w)), max(1, int(h))
+                
+                category_name = labels[int(category)] if int(category) < len(labels) else "unknown"
+                
+                print(f"Creating detection: {category_name} at ({x}, {y}, {w}, {h}) with confidence {score:.3f}")
+                
+                detection = PersonDetection(
+                    bbox=(x, y, w, h),
+                    confidence=float(score),
+                    category=category_name
+                )
+                detections.append(detection)
             
             self.last_detections = detections
             return detections

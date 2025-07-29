@@ -1,6 +1,6 @@
-"""Tests for PCA9685 servo controller implementation.
+"""Tests for simplified PCA9685 servo controller using Adafruit libraries.
 
-This module tests the real hardware servo controller with proper mocking
+This module tests the simplified servo controller with proper mocking
 for safe development and testing.
 """
 
@@ -8,21 +8,21 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from typing import Any
 
-# Import the servo controller (will be created after tests)
-# from raspibot.hardware.servo_controller import PCA9685ServoController
+from raspibot.exceptions import HardwareException
 
 
-class TestPCA9685ServoController:
-    """Test the PCA9685 servo controller implementation."""
+class TestSimplePCA9685ServoController:
+    """Test the simplified PCA9685 servo controller using Adafruit libraries."""
 
-    def test_initialization_adafruit(self):
+    def test_initialization_success(self):
         """Test PCA9685 controller initialization with Adafruit libraries."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
         
         with patch('adafruit_pca9685.PCA9685') as mock_pca, \
              patch('board.SCL') as mock_scl, \
              patch('board.SDA') as mock_sda, \
-             patch('busio.I2C') as mock_i2c_class:
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
             
             # Mock the PCA9685 instance
             mock_pca_instance = Mock()
@@ -32,241 +32,436 @@ class TestPCA9685ServoController:
             mock_i2c = Mock()
             mock_i2c_class.return_value = mock_i2c
             
-            # Create controller
-            controller = PCA9685ServoController(i2c_bus=1, address=0x40)
-            
-            # Verify Adafruit was used
-            assert controller.use_adafruit is True
-            assert controller.pca9685 == mock_pca_instance
-    
-    def test_initialization_smbus(self):
-        """Test PCA9685 controller initialization with smbus2 fallback."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
-        
-        with patch('adafruit_pca9685.PCA9685', side_effect=ImportError("Not available")), \
-             patch('smbus2.SMBus') as mock_smbus:
-            
-            # Mock the SMBus instance
-            mock_bus = Mock()
-            mock_smbus.return_value = mock_bus
+            # Mock servo instances
+            mock_pan_servo = Mock()
+            mock_tilt_servo = Mock()
+            mock_servo_class.side_effect = [mock_pan_servo, mock_tilt_servo]
             
             # Create controller
-            controller = PCA9685ServoController(i2c_bus=1, address=0x40)
+            controller = SimplePCA9685ServoController(i2c_bus=1, address=0x40)
             
-            # Verify smbus2 was used
-            assert controller.use_adafruit is False
-            assert controller.bus == mock_bus
+            # Verify initialization
+            assert controller.pca == mock_pca_instance
+            assert controller.pca.frequency == 50
+            assert 0 in controller.servos
+            assert 1 in controller.servos
     
-    def test_initialization_simulation(self):
-        """Test PCA9685 controller initialization in simulation mode."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+    def test_initialization_adafruit_not_available(self):
+        """Test PCA9685 controller initialization when Adafruit libraries are not available."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
         
-        # Test with invalid I2C bus to force simulation mode
-        controller = PCA9685ServoController(i2c_bus=999, address=0x40)
-        
-        # Verify simulation mode
-        assert controller.use_adafruit is False
-        assert controller.bus is None
-        assert controller.pca9685 is None
-
-    def test_set_pwm_frequency_adafruit(self):
-        """Test PWM frequency setting with Adafruit libraries."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+        with patch('raspibot.hardware.servo_controller.ADAFRUIT_AVAILABLE', False):
+            with pytest.raises(HardwareException, match="Adafruit libraries not available"):
+                SimplePCA9685ServoController()
+    
+    def test_servo_angle_validation(self):
+        """Test servo angle validation (0-180 degrees)."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
         
         with patch('adafruit_pca9685.PCA9685') as mock_pca, \
              patch('board.SCL') as mock_scl, \
              patch('board.SDA') as mock_sda, \
-             patch('busio.I2C') as mock_i2c_class:
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
             
+            # Mock setup
             mock_pca_instance = Mock()
             mock_pca.return_value = mock_pca_instance
             
             mock_i2c = Mock()
             mock_i2c_class.return_value = mock_i2c
             
-            controller = PCA9685ServoController(i2c_bus=1)
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
             
-            # Test setting frequency
-            controller.set_pwm_frequency(50)
+            controller = SimplePCA9685ServoController()
             
-            # Verify frequency was set
-            assert mock_pca_instance.frequency == 50
-    
-    def test_set_pwm_frequency_smbus(self):
-        """Test PWM frequency setting with smbus2."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
-        
-        with patch('adafruit_pca9685.PCA9685', side_effect=ImportError("Not available")), \
-             patch('smbus2.SMBus') as mock_smbus:
+            # Test valid angles
+            controller.set_servo_angle(0, 0)    # Should work
+            controller.set_servo_angle(0, 90)   # Should work
+            controller.set_servo_angle(0, 180)  # Should work
             
-            mock_bus = Mock()
-            mock_smbus.return_value = mock_bus
+            # Test invalid angles
+            with pytest.raises(HardwareException, match="Invalid angle"):
+                controller.set_servo_angle(0, -10)
             
-            controller = PCA9685ServoController(i2c_bus=1)
-            
-            # Test setting frequency
-            controller.set_pwm_frequency(50)
-            
-            # Verify I2C writes were called
-            assert mock_bus.write_byte_data.called
-
-    def test_servo_angle_validation(self):
-        """Test servo angle validation (0-180 degrees)."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
-        from raspibot.exceptions import HardwareException
-        
-        # Use invalid I2C bus to force simulation mode
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test valid angles
-        controller.set_servo_angle(0, 0)    # Should work
-        controller.set_servo_angle(0, 90)   # Should work
-        controller.set_servo_angle(0, 180)  # Should work
-        
-        # Test invalid angles - simulation mode still validates angles
-        # These should raise exceptions even in simulation mode
-        with pytest.raises(HardwareException, match="Invalid angle"):
-            controller.set_servo_angle(0, -10)
-        
-        with pytest.raises(HardwareException, match="Invalid angle"):
-            controller.set_servo_angle(0, 400)  # Beyond 359° range
+            with pytest.raises(HardwareException, match="Invalid angle"):
+                controller.set_servo_angle(0, 400)
 
     def test_channel_validation(self):
-        """Test servo channel validation (0-15)."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
-        from raspibot.exceptions import HardwareException
+        """Test servo channel validation."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
         
-        # Use invalid I2C bus to force simulation mode
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test valid channels
-        controller.set_servo_angle(0, 90)   # Should work
-        controller.set_servo_angle(15, 90)  # Should work
-        
-        # Test invalid channels
-        with pytest.raises(HardwareException, match="Invalid channel"):
-            controller.set_servo_angle(-1, 90)
-        
-        with pytest.raises(HardwareException, match="Invalid channel"):
-            controller.set_servo_angle(16, 90)
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test valid channels (0 and 1 are created by default)
+            controller.set_servo_angle(0, 90)   # Should work
+            controller.set_servo_angle(1, 90)   # Should work
+            
+            # Test invalid channels
+            with pytest.raises(HardwareException, match="Invalid channel"):
+                controller.set_servo_angle(2, 90)  # Channel 2 doesn't exist
 
-    def test_pwm_calculation(self):
-        """Test PWM calculation for servo angles."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+    def test_set_servo_angle(self):
+        """Test setting servo angle."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
         
-        # Use simulation mode to test PWM calculation
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test PWM calculation for different angles
-        controller.set_servo_angle(0, 0)    # 0 degrees
-        controller.set_servo_angle(0, 90)   # 90 degrees
-        controller.set_servo_angle(0, 180)  # 180 degrees
-        
-        # Verify current angles are set correctly
-        assert controller.get_servo_angle(0) == 180  # Last set angle
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test setting angle
+            controller.set_servo_angle(0, 90)
+            
+            # Verify servo angle was set
+            assert mock_servo.angle == 90
+            assert controller.current_angles[0] == 90
 
     def test_get_servo_angle(self):
         """Test getting current servo angle."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
         
-        # Use simulation mode to test angle getting
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Set an angle and verify we can get it back
-        controller.set_servo_angle(0, 90)
-        angle = controller.get_servo_angle(0)
-        assert angle == 90
-        
-        # Test getting angle for unset channel
-        angle = controller.get_servo_angle(1)
-        assert angle == 90  # Default angle
-
-    def test_emergency_stop(self):
-        """Test emergency stop functionality."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
-        
-        # Use simulation mode to test emergency stop
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test emergency stop doesn't crash
-        controller.emergency_stop()
-        
-        # Verify it logs the warning
-        # (We can't easily test logging in unit tests without complex setup)
-
-    def test_smooth_movement(self):
-        """Test smooth movement between angles."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
-        
-        # Use simulation mode to test smooth movement
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test smooth movement doesn't crash
-        controller.smooth_move_to_angle(0, 90, speed=1.0)
-        
-        # Verify final angle is set correctly
-        assert controller.get_servo_angle(0) == 90
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Set an angle and verify we can get it back
+            controller.set_servo_angle(0, 90)
+            angle = controller.get_servo_angle(0)
+            assert angle == 90
+            
+            # Test getting angle for unset channel
+            angle = controller.get_servo_angle(1)
+            assert angle == 90  # Default angle
 
     def test_calibration_offset(self):
         """Test servo calibration offset handling."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
+        
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Set calibration offset
+            controller.set_calibration_offset(0, 5.0)  # 5 degree offset
+            
+            # Verify offset is stored
+            offset = controller.get_calibration_offset(0)
+            assert offset == 5.0
+            
+            # Test angle with offset
+            controller.set_servo_angle(0, 90)
+            
+            # Verify angle is set with offset applied
+            assert mock_servo.angle == 95  # 90 + 5 offset
+            assert controller.current_angles[0] == 90  # Original angle stored
+
+    def test_smooth_movement(self):
+        """Test smooth movement between angles."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
+        
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class, \
+             patch('time.sleep') as mock_sleep:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test smooth movement
+            controller.smooth_move_to_angle(0, 90, speed=1.0)
+            
+            # Verify servo angle was set multiple times (smooth movement)
+            assert mock_servo.angle == 90
+            assert controller.current_angles[0] == 90
+            assert mock_sleep.called  # Should have delays between steps
+
+    def test_emergency_stop(self):
+        """Test emergency stop functionality."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
+        
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test emergency stop doesn't crash
+            controller.emergency_stop()
+            # Emergency stop just maintains current position, no hardware calls
+
+    def test_controller_type(self):
+        """Test controller type identification."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
+        
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test controller type
+            assert controller.get_controller_type() == "Simple PCA9685 (Adafruit)"
+
+    def test_available_channels(self):
+        """Test available channels list."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
+        
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test available channels
+            channels = controller.get_available_channels()
+            assert channels == [0, 1]  # Pan and tilt servos
+
+    def test_shutdown(self):
+        """Test controller shutdown."""
+        from raspibot.hardware.servo_controller import SimplePCA9685ServoController
+        
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            controller = SimplePCA9685ServoController()
+            
+            # Test shutdown doesn't crash
+            controller.shutdown()
+            # Shutdown just maintains current position, no hardware calls
+
+
+class TestLegacyPCA9685ServoController:
+    """Test the legacy PCA9685 servo controller for backward compatibility."""
+
+    def test_legacy_compatibility(self):
+        """Test that legacy PCA9685ServoController still works."""
         from raspibot.hardware.servo_controller import PCA9685ServoController
         
-        # Use simulation mode to test calibration offset
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Set calibration offset
-        controller.set_calibration_offset(0, 5.0)  # 5 degree offset
-        
-        # Verify offset is stored
-        offset = controller.get_calibration_offset(0)
-        assert offset == 5.0
-        
-        # Test angle with offset
-        controller.set_servo_angle(0, 90)
-        
-        # Verify angle is set correctly (offset is applied internally)
-        assert controller.get_servo_angle(0) == 90
+        with patch('adafruit_pca9685.PCA9685') as mock_pca, \
+             patch('board.SCL') as mock_scl, \
+             patch('board.SDA') as mock_sda, \
+             patch('busio.I2C') as mock_i2c_class, \
+             patch('adafruit_motor.servo.Servo') as mock_servo_class:
+            
+            # Mock setup
+            mock_pca_instance = Mock()
+            mock_pca.return_value = mock_pca_instance
+            
+            mock_i2c = Mock()
+            mock_i2c_class.return_value = mock_i2c
+            
+            mock_servo = Mock()
+            mock_servo_class.return_value = mock_servo
+            
+            # Test legacy controller still works
+            controller = PCA9685ServoController()
+            
+            # Test basic functionality
+            controller.set_servo_angle(0, 90)
+            assert controller.get_servo_angle(0) == 90
+            assert controller.get_controller_type() == "Simple PCA9685 (Adafruit)"
 
 
-class TestServoSafety:
-    """Test servo safety features."""
+class TestGPIOServoController:
+    """Test the GPIO servo controller."""
 
-    def test_speed_limiting(self):
-        """Test speed limiting to prevent damage."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+    def test_gpio_initialization_success(self):
+        """Test GPIO controller initialization with RPi.GPIO available."""
+        from raspibot.hardware.servo_controller import GPIOServoController
         
-        # Use simulation mode to test speed limiting
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test that very fast movements are limited
-        controller.set_servo_angle(0, 180)  # Fast movement
-        
-        # Should be limited to safe speed
-        # Implementation will ensure gradual movement
+        with patch('RPi.GPIO') as mock_gpio:
+            controller = GPIOServoController()
+            
+            # Verify GPIO was initialized
+            assert hasattr(controller, 'gpio')
+            assert controller.gpio == mock_gpio
 
-    def test_concurrent_movement_limits(self):
-        """Test limits on concurrent servo movements."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+    def test_gpio_initialization_failure(self):
+        """Test GPIO controller initialization when RPi.GPIO is not available."""
+        from raspibot.hardware.servo_controller import GPIOServoController
         
-        # Use simulation mode to test concurrent movements
-        controller = PCA9685ServoController(i2c_bus=999)
-        
-        # Test moving multiple servos simultaneously
-        controller.set_servo_angle(0, 90)
-        controller.set_servo_angle(1, 90)
-        
-        # Should handle multiple servos safely
-        # Implementation will manage power and timing
+        with patch('RPi.GPIO', side_effect=ImportError("No module named 'RPi'")):
+            controller = GPIOServoController()
+            
+            # Should still work in simulation mode
+            assert not hasattr(controller, 'gpio')
+            controller.set_servo_angle(0, 90)  # Should not crash
 
-    def test_error_recovery(self):
-        """Test error recovery mechanisms."""
-        from raspibot.hardware.servo_controller import PCA9685ServoController
+    def test_gpio_servo_angle_validation(self):
+        """Test GPIO servo angle validation."""
+        from raspibot.hardware.servo_controller import GPIOServoController
         
-        # Use simulation mode to test error recovery
-        controller = PCA9685ServoController(i2c_bus=999)
+        with patch('RPi.GPIO') as mock_gpio:
+            controller = GPIOServoController()
+            
+            # Test valid angles
+            controller.set_servo_angle(0, 0)    # Should work
+            controller.set_servo_angle(0, 90)   # Should work
+            controller.set_servo_angle(0, 180)  # Should work
+            
+            # Test invalid angles
+            with pytest.raises(HardwareException, match="Invalid angle"):
+                controller.set_servo_angle(0, -10)
+            
+            with pytest.raises(HardwareException, match="Invalid angle"):
+                controller.set_servo_angle(0, 400)
+
+    def test_gpio_channel_validation(self):
+        """Test GPIO servo channel validation."""
+        from raspibot.hardware.servo_controller import GPIOServoController
         
-        # Test error handling with invalid channel
-        with pytest.raises(Exception):
-            controller.set_servo_angle(999, 90)  # Invalid channel
+        with patch('RPi.GPIO') as mock_gpio:
+            controller = GPIOServoController()
+            
+            # Test valid channels (0 and 1 are default)
+            controller.set_servo_angle(0, 90)   # Should work
+            controller.set_servo_angle(1, 90)   # Should work
+            
+            # Test invalid channels
+            with pytest.raises(HardwareException, match="Invalid channel"):
+                controller.set_servo_angle(2, 90)  # Channel 2 doesn't exist
+
+    def test_gpio_emergency_stop(self):
+        """Test GPIO emergency stop functionality."""
+        from raspibot.hardware.servo_controller import GPIOServoController
         
-        # Should implement retry logic or graceful degradation 
+        with patch('RPi.GPIO') as mock_gpio:
+            controller = GPIOServoController()
+            
+            # Test emergency stop
+            controller.emergency_stop()
+            
+            # Verify GPIO outputs were set to False
+            assert mock_gpio.output.called
+
+    def test_gpio_shutdown(self):
+        """Test GPIO controller shutdown."""
+        from raspibot.hardware.servo_controller import GPIOServoController
+        
+        with patch('RPi.GPIO') as mock_gpio:
+            controller = GPIOServoController()
+            
+            # Test shutdown
+            controller.shutdown()
+            
+            # Verify GPIO cleanup was called
+            assert mock_gpio.cleanup.called 

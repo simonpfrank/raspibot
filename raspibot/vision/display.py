@@ -1,15 +1,24 @@
-"""Visual display for camera feed with face detection boxes."""
+"""Visual display for camera feed with face detection boxes.
+
+This module provides a legacy interface to the new headless display architecture.
+For new code, use DisplayManager directly.
+"""
 
 import cv2
 import numpy as np
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 
+from .display_manager import DisplayManager
 from ..utils.logging_config import setup_logging
 
 
 class Display:
-    """Simple display for camera feed with face detection boxes."""
+    """Legacy display interface for camera feed with face detection boxes.
+    
+    This class provides backward compatibility with the old display interface.
+    For new code, use DisplayManager directly for better flexibility.
+    """
     
     def __init__(self, window_name: str = "Face Tracking Robot", 
                  font_scale: float = 1.0, 
@@ -29,57 +38,33 @@ class Display:
         self.font_thickness = font_thickness
         self.logger = setup_logging(__name__)
         
-        # Auto-detect headless environment
-        if headless is None:
-            self.headless = self._is_headless_environment()
+        # Initialize display manager
+        if headless is not None:
+            # Force specific mode
+            mode = 'headless' if headless else 'auto'
+            self.display_manager = DisplayManager(auto_detect=False, mode=mode)
         else:
-            self.headless = headless
+            # Auto-detect
+            self.display_manager = DisplayManager(auto_detect=True)
         
-        # Colors (BGR format)
+        self.display_handler = self.display_manager.get_display_handler()
+        self.display_method = self.display_manager.get_display_method()
+        
+        # Colors (BGR format) - for backward compatibility
         self.face_color = (0, 255, 0)      # Green for face boxes
         self.center_color = (0, 255, 0)    # Green for face centers
         self.text_color = (0, 255, 0)      # Green for text
         self.stable_color = (0, 255, 0)    # Green for stable faces
         self.unstable_color = (0, 0, 255)  # Red for unstable faces
         
-        # Create window only if not headless
-        if not self.headless:
-            try:
-                cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
-                self.logger.info(f"Display window '{self.window_name}' created")
-            except Exception as e:
-                self.logger.warning(f"Failed to create display window: {e}")
-                self.headless = True
-        else:
-            self.logger.info("Running in headless mode - no display window created")
+        # Legacy headless property for backward compatibility
+        self.headless = self.display_method == 'headless'
+        
+        self.logger.info(f"Legacy Display initialized with {self.display_method} mode")
     
     def _is_headless_environment(self) -> bool:
-        """Detect if running in a headless environment."""
-        # Check for Raspberry Pi Connect / WayVNC environment
-        if os.path.exists('/tmp/wayvnc/wayvncctl.sock'):
-            # WayVNC is running, check if we can access X11
-            if os.path.exists('/tmp/.X11-unix/X0'):
-                # X11 server is available, try to set DISPLAY if not set
-                if 'DISPLAY' not in os.environ:
-                    os.environ['DISPLAY'] = ':0'
-                return False
-        
-        # Check for common headless indicators
-        headless_indicators = [
-            'DISPLAY' not in os.environ,
-            os.environ.get('DISPLAY', '') == '',
-            os.environ.get('XDG_SESSION_TYPE', '') == 'tty',
-            os.environ.get('TERM', '') == 'linux',
-            'SSH_CONNECTION' in os.environ and 'DISPLAY' not in os.environ,
-        ]
-        
-        # Check if we can actually create a window
-        try:
-            cv2.namedWindow("test", cv2.WINDOW_AUTOSIZE)
-            cv2.destroyWindow("test")
-            return False
-        except Exception:
-            return True
+        """Legacy method for backward compatibility."""
+        return self.headless
     
     def show_frame(self, frame: np.ndarray, 
                    faces: List[Tuple[int, int, int, int]] = None,
@@ -125,21 +110,21 @@ class Display:
             # Draw status information
             self._draw_status_info(display_frame, faces, stable_faces, camera_fps, detection_fps, servo_position, search_status)
             
-            # Show the frame only if not headless
-            if not self.headless:
-                cv2.imshow(self.window_name, display_frame)
-                # Check for quit key
-                key = cv2.waitKey(1) & 0xFF
-                return key != ord('q')
-            else:
-                # In headless mode, just log the status
-                total_faces = len(faces) if faces else 0
-                stable_count = len(stable_faces) if stable_faces else 0
-                search_active = search_status.get('active', False) if search_status else False
-                self.logger.debug(f"Headless display: {total_faces} faces ({stable_count} stable), "
-                                f"Camera: {camera_fps:.1f} FPS, Detection: {detection_fps:.1f} FPS, "
-                                f"Search: {'ACTIVE' if search_active else 'inactive'}")
-                return True
+            # Prepare display data for new system
+            display_data = {
+                'frame': display_frame,
+                'fps': camera_fps,
+                'frame_count': 0,  # Not tracked in legacy interface
+                'show_info': True,
+                'camera_info': {
+                    'type': 'Legacy Camera',
+                    'resolution': frame.shape[1::-1] if frame is not None else (0, 0),
+                    'display_method': self.display_method
+                }
+            }
+            
+            # Use new display system
+            return self.display_handler.show_frame(display_data)
             
         except Exception as e:
             self.logger.error(f"Error displaying frame: {e}")
@@ -147,14 +132,8 @@ class Display:
     
     def close(self) -> None:
         """Close display window and cleanup."""
-        if not self.headless:
-            try:
-                cv2.destroyWindow(self.window_name)
-                self.logger.info(f"Display window '{self.window_name}' closed")
-            except Exception as e:
-                self.logger.error(f"Error closing display: {e}")
-        else:
-            self.logger.debug("Headless display closed")
+        self.display_handler.close()
+        self.logger.info(f"Legacy display closed ({self.display_method} mode)")
     
     def _draw_face_rectangle(self, frame: np.ndarray, face: Tuple[int, int, int, int], 
                            color: Tuple[int, int, int], label: str) -> None:

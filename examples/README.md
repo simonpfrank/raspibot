@@ -7,9 +7,10 @@ This directory contains educational examples and demonstrations for the Raspibot
 ### `/basic/` - Simple Examples
 Start here if you're new to the project. These examples demonstrate single concepts and are easy to understand.
 
-- **camera_basics.py** - Basic camera operations and selection
-- **camera_capture.py** - Simple camera capture and display
+- **camera_basic.py** - Basic camera capture with automatic display detection
+- **camera_advanced.py** - Advanced camera features with manual display control
 - **face_detection.py** - Simple face detection without tracking
+- **face_detection_enhanced.py** - Multi-stage detection (person → face) with movement tracking
 - **face_tracking_simple.py** - Basic face tracking demonstration
 - **servo_control.py** - Interactive servo control with patterns and individual servo control
 
@@ -39,13 +40,14 @@ Hardware-specific examples and tutorials for servo control and GPIO operations.
 
 For beginners, we recommend this learning path:
 
-1. Start with `/basic/camera_capture.py` to understand basic camera operations
-2. Try `/basic/camera_basics.py` to learn about camera selection
+1. Start with `/basic/camera_basic.py` to understand basic camera operations with automatic display detection
+2. Try `/basic/camera_advanced.py` to learn about advanced camera features and manual display control
 3. Explore `/basic/servo_control.py` to understand servo movement
-4. Try `/basic/face_detection.py` to see face detection in action
-5. Move to `/basic/face_tracking_simple.py` for basic tracking
-6. Explore `/hardware/` examples for advanced servo control
-7. Finally, try `/advanced/` examples for complete system demonstrations
+4. Try `/basic/face_detection.py` to see basic face detection in action
+5. Try `/basic/face_detection_enhanced.py` to see multi-stage detection with movement tracking
+6. Move to `/basic/face_tracking_simple.py` for basic tracking
+7. Explore `/hardware/` examples for advanced servo control
+8. Finally, try `/advanced/` examples for complete system demonstrations
 
 ## Troubleshooting
 
