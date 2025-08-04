@@ -1,10 +1,11 @@
-"""Simple camera interface for different camera implementations."""
+"""Simple camera template for different camera implementations, avoiding
+the abstract base classes."""
 
 from typing import Optional, Tuple
 import numpy as np
 
 
-class CameraInterface:
+class CameraTemplate:
     """Simple base class for camera implementations.
     
     This provides a common interface without the complexity of abstract base classes.
@@ -29,7 +30,7 @@ class CameraInterface:
         """
         raise NotImplementedError("Subclass must implement get_frame()")
     
-    def stop(self) -> None:
+    def shutdown(self) -> None:
         """Stop camera capture and release resources."""
         raise NotImplementedError("Subclass must implement stop()")
     
@@ -67,4 +68,4 @@ class CameraInterface:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
-        self.stop() 
+        self.shutdown() 

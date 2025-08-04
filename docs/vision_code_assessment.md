@@ -24,14 +24,14 @@ The `raspibot/vision` folder contains several advanced programming patterns that
 
 ## Detailed Analysis
 
-### 1. Abstract Base Class - `CameraInterface` ❌
+### 1. Abstract Base Class - `CameraTemplate` ❌
 
 **File:** `camera_interface.py`
 
 **Issue:** Uses Python's ABC (Abstract Base Class) pattern with abstract methods.
 
 ```python
-class CameraInterface(ABC):
+class CameraTemplate(ABC):
     @abstractmethod
     def start(self) -> bool:
         pass
@@ -171,7 +171,7 @@ class PersonDetection:
    ```
    Level 1: SimpleCamera (basic OpenCV capture)
    Level 2: Camera with error handling
-   Level 3: CameraInterface pattern
+   Level 3: CameraTemplate pattern
    Level 4: PiAICamera (advanced hardware)
    ```
 

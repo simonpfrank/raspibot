@@ -11,7 +11,7 @@ from typing import Dict, Optional, Final
 from abc import ABC, abstractmethod
 
 # Hardware configuration
-from raspibot.config.hardware_config import (
+from raspibot.settings.config import (
     I2C_BUS,
     PCA9685_ADDRESS,
     SERVO_PAN_0_PULSE,
@@ -24,7 +24,7 @@ from raspibot.config.hardware_config import (
     SERVO_MAX_ANGLE,
     SERVO_DEFAULT_ANGLE,
 )
-
+from raspibot.hardware.servos.servo_template import ServoInterface
 # Custom exceptions
 from raspibot.exceptions import HardwareException
 
@@ -38,25 +38,6 @@ try:
 except ImportError:
     ADAFRUIT_AVAILABLE = False
     print("⚠️  Adafruit libraries not available. Install with: pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor")
-
-
-class ServoInterface(ABC):
-    """Abstract interface for servo controllers."""
-    
-    @abstractmethod
-    def set_servo_angle(self, channel: int, angle: float) -> None:
-        """Set servo angle."""
-        pass
-    
-    @abstractmethod
-    def get_servo_angle(self, channel: int) -> float:
-        """Get current servo angle."""
-        pass
-    
-    @abstractmethod
-    def shutdown(self) -> None:
-        """Shutdown the controller."""
-        pass
 
 
 class SimplePCA9685ServoController(ServoInterface):

@@ -31,7 +31,7 @@ from raspibot.hardware.servo_selector import (
 from raspibot.hardware.servo_interface import ServoInterface
 from raspibot.movement.pan_tilt import PanTiltSystem
 from raspibot.utils.logging_config import setup_logging
-from raspibot.config.hardware_config import (
+from raspibot.settings.config import (
     SERVO_PAN_CHANNEL, SERVO_TILT_CHANNEL,
     SERVO_PAN_MIN_ANGLE, SERVO_PAN_MAX_ANGLE, SERVO_PAN_CENTER,
     SERVO_TILT_MIN_ANGLE, SERVO_TILT_MAX_ANGLE, SERVO_TILT_CENTER

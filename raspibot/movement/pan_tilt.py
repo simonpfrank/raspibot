@@ -8,10 +8,10 @@ import math
 import time
 from typing import Tuple, Optional
 
-from raspibot.hardware.servo_interface import ServoInterface
+from raspibot.hardware.servos.servo_interface import ServoInterface
 from raspibot.exceptions import HardwareException
 from raspibot.utils.logging_config import setup_logging
-from raspibot.config.hardware_config import (
+from raspibot.settings.config import (
     SERVO_PAN_MIN_ANGLE, SERVO_PAN_MAX_ANGLE, SERVO_PAN_CENTER,
     SERVO_TILT_MIN_ANGLE, SERVO_TILT_MAX_ANGLE, SERVO_TILT_CENTER,
     SERVO_TILT_UP_ANGLE, SERVO_TILT_DOWN_ANGLE

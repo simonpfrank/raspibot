@@ -1,7 +1,7 @@
 """
 Basic camera implementation for non-AI operations.
 
-This module provides a BasicCamera class that supports full resolution control
+This module provides a PiCamera class that supports full resolution control
 without AI constraints, suitable for high-resolution captures and variable
 resolution video recording.
 """
@@ -13,11 +13,11 @@ import numpy as np
 from picamera2 import Picamera2, Preview
 from libcamera import Transform, ColorSpace
 
-from .camera_interface import CameraInterface
-from ..utils.logging_config import setup_logging
+from .camera_template import CameraTemplate
+from raspibot.utils.logging_config import setup_logging
 
 
-class BasicCamera(CameraInterface):
+class PiCamera(CameraTemplate):
     """
     Basic camera implementation for non-AI operations.
     
@@ -31,7 +31,7 @@ class BasicCamera(CameraInterface):
     
     def __init__(self, camera_num: int = 0, camera_mode: str = "normal_video"):
         """
-        Initialize BasicCamera.
+        Initialize PiCamera.
         
         Args:
             camera_num: Camera device number (default: 0)
@@ -59,16 +59,16 @@ class BasicCamera(CameraInterface):
         self.fps_start_time = time.time()
         self.current_fps = 0.0
         
-        self.logger.info(f"Initializing BasicCamera for device {camera_num} in {camera_mode} mode")
+        self.logger.info(f"Initializing PiCamera for device {camera_num} in {camera_mode} mode")
         self._initialize_camera()
     
     def _initialize_camera(self) -> None:
         """Initialize the camera hardware."""
         try:
             self.picam2 = Picamera2(self.camera_num)
-            self.logger.info("BasicCamera initialized successfully")
+            self.logger.info("PiCamera initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to initialize BasicCamera: {e}")
+            self.logger.error(f"Failed to initialize PiCamera: {e}")
             raise
     
     def start(self) -> bool:
@@ -83,7 +83,7 @@ class BasicCamera(CameraInterface):
             return False
         
         try:
-            self.logger.info(f"Starting BasicCamera at {self.current_resolution} in {self.current_mode} mode")
+            self.logger.info(f"Starting PiCamera at {self.current_resolution} in {self.current_mode} mode")
             
             # Create configuration based on current settings
             config = self._create_configuration()
@@ -94,11 +94,11 @@ class BasicCamera(CameraInterface):
             self.fps_start_time = time.time()
             self.fps_counter = 0
             
-            self.logger.info("BasicCamera started successfully")
+            self.logger.info("PiCamera started successfully")
             return True
             
         except Exception as e:
-            self.logger.error(f"Error starting BasicCamera: {e}")
+            self.logger.error(f"Error starting PiCamera: {e}")
             return False
     
     def _create_configuration(self) -> Dict[str, Any]:
@@ -323,9 +323,9 @@ class BasicCamera(CameraInterface):
             if self.picam2 is not None and self.is_running:
                 self.picam2.stop()
                 self.is_running = False
-                self.logger.info("BasicCamera stopped")
+                self.logger.info("PiCamera stopped")
         except Exception as e:
-            self.logger.error(f"Error stopping BasicCamera: {e}")
+            self.logger.error(f"Error stopping PiCamera: {e}")
     
     def shutdown(self) -> None:
         """Shutdown the camera completely."""
@@ -334,9 +334,9 @@ class BasicCamera(CameraInterface):
             if self.picam2 is not None:
                 self.picam2.close()
                 self.picam2 = None
-                self.logger.info("BasicCamera shutdown")
+                self.logger.info("PiCamera shutdown")
         except Exception as e:
-            self.logger.error(f"Error shutting down BasicCamera: {e}")
+            self.logger.error(f"Error shutting down PiCamera: {e}")
     
     def cleanup(self) -> None:
         """Cleanup camera resources."""

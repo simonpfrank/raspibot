@@ -14,8 +14,8 @@ from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 import numpy as np
 
-from .camera_interface import CameraInterface
-from ..utils.logging_config import setup_logging
+from .camera_template import CameraTemplate
+from raspibot.utils.logging_config import setup_logging
 
 
 @dataclass
@@ -100,13 +100,13 @@ class WebcamDetector:
         max_fps = 0.0
         
         try:
-            cap = cv2.VideoCapture(device_number)
+            self.stream= cv2.VideoCapture(device_number)
             
-            if not cap.isOpened():
+            if not self.stream.isOpened():
                 return False, [], 0.0
             
             # Set a timeout for frame capture to prevent hanging
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.stream.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
             # Test common resolutions (reduced list for faster testing)
             test_resolutions = [
@@ -116,16 +116,16 @@ class WebcamDetector:
             ]
             
             for width, height in test_resolutions:
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
                 
                 # Check if resolution was actually set
-                actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                actual_width = int(self.stream.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 
                 if actual_width == width and actual_height == height:
                     # Try to capture a frame to verify it works (with timeout)
-                    ret, frame = cap.read()
+                    ret, frame = self.stream.read()
                     if ret and frame is not None and frame.size > 0:
                         if (actual_width, actual_height) not in supported_resolutions:
                             supported_resolutions.append((actual_width, actual_height))
@@ -133,11 +133,11 @@ class WebcamDetector:
             # Get maximum FPS (usually at lowest resolution)
             if supported_resolutions:
                 min_res = min(supported_resolutions, key=lambda x: x[0] * x[1])
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, min_res[0])
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, min_res[1])
-                max_fps = cap.get(cv2.CAP_PROP_FPS)
+                self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, min_res[0])
+                self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, min_res[1])
+                max_fps = self.stream.get(cv2.CAP_PROP_FPS)
             
-            cap.release()
+            self.stream.release()
             return True, supported_resolutions, max_fps
             
         except Exception as e:
@@ -181,7 +181,7 @@ class WebcamDetector:
         return None
 
 
-class USBCam(CameraInterface):
+class USBCamera(CameraTemplate):
     """
     USB Camera implementation with automatic detection and capability discovery.
     
@@ -205,7 +205,7 @@ class USBCam(CameraInterface):
         self.target_width = width
         self.target_height = height
         
-        self.cap = None
+        self.stream = None
         self.is_running = False
         self.webcam_info: Optional[WebcamInfo] = None
         
@@ -295,18 +295,18 @@ class USBCam(CameraInterface):
         try:
             self.logger.info(f"Starting USB camera device {self.webcam_info.device_number}")
             
-            self.cap = cv2.VideoCapture(self.webcam_info.device_number)
-            if not self.cap.isOpened():
+            self.stream = cv2.VideoCapture(self.webcam_info.device_number)
+            if not self.stream.isOpened():
                 self.logger.error(f"Failed to open camera device {self.webcam_info.device_number}")
                 return False
             
             # Set resolution
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.current_width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.current_height)
+            self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, self.current_width)
+            self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, self.current_height)
             
             # Verify actual resolution
-            actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            actual_width = int(self.stream.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
             if actual_width != self.current_width or actual_height != self.current_height:
                 self.logger.warning(f"Requested {self.current_width}x{self.current_height}, "
@@ -327,11 +327,11 @@ class USBCam(CameraInterface):
     
     def get_frame(self) -> Optional[np.ndarray]:
         """Get a frame from the camera."""
-        if not self.is_running or self.cap is None:
+        if not self.is_running or self.stream is None:
             return None
         
         try:
-            ret, frame = self.cap.read()
+            ret, frame = self.stream.read()
             if ret:
                 self._update_fps()
                 return frame
@@ -345,11 +345,11 @@ class USBCam(CameraInterface):
     
     def get_frame_grayscale(self) -> Optional[np.ndarray]:
         """Get a grayscale frame from the camera."""
-        if not self.is_running or self.cap is None:
+        if not self.is_running or self.stream is None:
             return None
         
         try:
-            ret, frame = self.cap.read()
+            ret, frame = self.stream.read()
             if ret:
                 self._update_fps()
                 
@@ -391,14 +391,14 @@ class USBCam(CameraInterface):
     
     def is_available(self) -> bool:
         """Check if camera is available."""
-        return self.is_running and self.cap is not None and self.cap.isOpened()
+        return self.is_running and self.stream is not None and self.stream.isOpened()
     
-    def stop(self) -> None:
+    def shutdown(self) -> None:
         """Stop camera capture."""
         try:
-            if self.cap is not None:
-                self.cap.release()
-                self.cap = None
+            if self.stream is not None:
+                self.stream.release()
+                self.stream = None
             
             self.is_running = False
             self.logger.info("USB camera stopped")
@@ -406,9 +406,7 @@ class USBCam(CameraInterface):
         except Exception as e:
             self.logger.error(f"Error stopping USB camera: {e}")
     
-    def shutdown(self) -> None:
-        """Shutdown the camera completely."""
-        self.stop()
+    
     
     def cleanup(self) -> None:
         """Cleanup camera resources."""

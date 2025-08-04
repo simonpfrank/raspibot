@@ -10,7 +10,7 @@ from typing import List, Tuple, Optional, Callable
 from enum import Enum
 
 from ..movement.pan_tilt import PanTiltSystem
-from ..config.hardware_config import (
+from ..config.config import (
     SEARCH_PAN_STEPS, SEARCH_TILT_STEPS, SEARCH_MOVEMENT_SPEED,
     SEARCH_STABILIZATION_DELAY, SEARCH_FACE_DETECTION_DELAY,
     SEARCH_PATTERN_TIMEOUT, SEARCH_RETURN_TO_CENTER,

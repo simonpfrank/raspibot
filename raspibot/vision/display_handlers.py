@@ -217,7 +217,7 @@ class RaspberryConnectDisplayHandler(BaseDisplayHandler):
             screen_width, screen_height = get_screen_dimensions()
             
             # Use camera configuration from hardware config
-            from raspibot.config.hardware_config import PI_AI_CAMERA_CONFIG
+            from raspibot.settings.config import PI_AI_CAMERA_CONFIG
             
             # Get display resolution from config - use it directly for window size
             display_config = PI_AI_CAMERA_CONFIG["camera_modes"]["normal_video"]["display"]

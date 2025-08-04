@@ -7,8 +7,8 @@ allowing easy switching between different hardware implementations.
 from enum import Enum
 from typing import Union, Any, List
 
-from raspibot.hardware.servo_interface import ServoInterface
-from raspibot.hardware.servo_controller import PCA9685ServoController, GPIOServoController
+from raspibot.hardware.servos.servo_template import ServoInterface
+from raspibot.hardware.servos.servo_controller import PCA9685ServoController, GPIOServoController
 from raspibot.exceptions import HardwareException
 from raspibot.utils.logging_config import setup_logging
 

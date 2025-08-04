@@ -7,7 +7,7 @@ from typing import Optional
 
 from raspibot.vision.pi_ai_camera import PiAICamera, PICAMERA2_AVAILABLE
 from raspibot.vision.detection_models import PersonDetection
-from raspibot.vision.camera_selector import get_camera, CameraType, is_pi_ai_available, get_available_cameras, get_recommended_camera
+from raspibot.vision.camera_selector import get_camera, CameraType, is_pi_ai_available, get_available_cameras, get_best_available_camera
 
 
 class TestPiAICamera:
@@ -585,16 +585,16 @@ class TestCameraFactory:
             assert CameraType.PI_AI in available
             assert len(available) == 2
     
-    def test_get_recommended_camera_pi_ai(self):
+    def test_get_best_available_camera_pi_ai(self):
         """Test getting recommended camera when Pi AI is available."""
         with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=True):
-            recommended = get_recommended_camera()
+            recommended = get_best_available_camera()
             
             assert recommended == CameraType.PI_AI
     
-    def test_get_recommended_camera_webcam(self):
+    def test_get_best_available_camera_webcam(self):
         """Test getting recommended camera when Pi AI is unavailable."""
         with patch('raspibot.vision.camera_selector.is_pi_ai_available', return_value=False):
-            recommended = get_recommended_camera()
+            recommended = get_best_available_camera()
             
             assert recommended == CameraType.WEBCAM 

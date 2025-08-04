@@ -52,7 +52,7 @@ This document describes the implementation of camera modes in the raspibot visio
 - Added `get_camera_mode_info()` method for mode information
 - Enhanced `get_frame()` and `get_frame_grayscale()` for mode-specific processing
 
-#### `raspibot/vision/basic_camera.py`
+#### `raspibot/vision/pi_camera.py`
 - Added `camera_mode` parameter to constructor
 - Updated initialization to set appropriate resolution and format
 - Added `get_detection_frame()` method for OpenCV detection
@@ -89,7 +89,7 @@ This document describes the implementation of camera modes in the raspibot visio
 - Added tests for camera mode information retrieval
 
 #### `tests/unit/test_vision/test_camera.py`
-- Added `TestBasicCamera` class
+- Added `TestPiCamera` class
 - Tests for camera mode initialization
 - Tests for detection frame capture
 - Tests for camera mode information

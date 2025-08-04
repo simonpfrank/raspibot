@@ -14,7 +14,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from raspibot.hardware.servo_controller import GPIOServoController
-from raspibot.config.hardware_config import (
+from raspibot.settings.config import (
     GPIO_SERVO_DEADBAND,
     GPIO_SERVO_MIN_STEP_SIZE,
     GPIO_SERVO_MAX_STEP_SIZE,

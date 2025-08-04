@@ -9,7 +9,7 @@ import os
 from unittest.mock import Mock
 from typing import Generator
 
-from raspibot.hardware.interfaces import ServoController, Camera
+from raspibot.hardware.servos.servo_interface import ServoController, Camera
 
 
 @pytest.fixture

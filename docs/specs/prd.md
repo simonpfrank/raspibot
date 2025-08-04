@@ -123,7 +123,7 @@ raspibot/
 
 #### 3.2.2 Hardware Layer
 - **ServoController** (`hardware/servo_controller.py`): PCA9685 interface
-- **CameraInterface** (`hardware/camera.py`): Camera abstraction
+- **CameraTemplate** (`hardware/camera.py`): Camera abstraction
 - **MotorController** (`hardware/motors.py`): DC motor control
 - **SensorInterface** (`hardware/sensors.py`): Sensor data collection
 - **DisplayInterface** (`hardware/display.py`): Display hardware abstraction

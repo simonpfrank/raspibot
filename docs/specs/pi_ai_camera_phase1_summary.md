@@ -7,7 +7,7 @@
 ## ✅ Achievements
 
 ### 1. **Core Infrastructure**
-- ✅ **CameraInterface**: Abstract base class for camera implementations
+- ✅ **CameraTemplate**: Abstract base class for camera implementations
 - ✅ **PiAICamera**: Hardware-accelerated camera using IMX500
 - ✅ **CameraFactory**: Factory pattern for automatic camera selection
 - ✅ **Detection Models**: Data structures for people and face detection
@@ -29,7 +29,7 @@
 ## 🏗️ Architecture Overview
 
 ```
-CameraInterface (Abstract)
+CameraTemplate (Abstract)
 ├── Camera (Webcam implementation)
 └── PiAICamera (IMX500 implementation)
     ├── Hardware acceleration
@@ -68,7 +68,7 @@ Detection Models
 
 #### 1. **PiAICamera Class**
 ```python
-class PiAICamera(CameraInterface):
+class PiAICamera(CameraTemplate):
     """Hardware-accelerated camera using IMX500."""
     
     def __init__(self, model_path, confidence_threshold, ...):
@@ -87,7 +87,7 @@ class PiAICamera(CameraInterface):
 ```python
 class CameraFactory:
     @staticmethod
-    def create_camera(camera_type="auto") -> CameraInterface:
+    def create_camera(camera_type="auto") -> CameraTemplate:
         # Auto-detect Pi AI camera availability
         # Fall back to webcam if needed
         # Return appropriate camera instance
@@ -155,7 +155,7 @@ Demo completed!
 - `tests/unit/test_pi_ai_camera.py` - Unit tests
 
 ### Modified Files
-- `raspibot/vision/camera.py` - Updated to implement CameraInterface
+- `raspibot/vision/camera.py` - Updated to implement CameraTemplate
 - `raspibot/config/hardware_config.py` - Added Pi AI camera configuration
 - `requirements.txt` - Added picamera2 dependency
 

@@ -7,7 +7,7 @@ The user has connected a new Pi AI camera and wants to create classes to use it 
 
 ### Phase 1: Basic Pi AI Camera Integration ✅ COMPLETED
 - [x] Create comprehensive specification document
-- [x] Create `CameraInterface` abstract base class
+- [x] Create `CameraTemplate` abstract base class
 - [x] Implement `PiAICamera` class with IMX500 hardware acceleration
 - [x] Add hardware detection parsing for COCO dataset objects
 - [x] Create unit tests for Pi AI camera functionality
@@ -42,7 +42,7 @@ The user has connected a new Pi AI camera and wants to create classes to use it 
 ### 2024-12-19 - Phase 1 Implementation Complete
 - ✅ Created comprehensive specification document covering all phases
 - ✅ Analyzed existing example code in `experiments/raspibot_camera.py`
-- ✅ Created `CameraInterface` abstract base class
+- ✅ Created `CameraTemplate` abstract base class
 - ✅ Implemented `PiAICamera` class with IMX500 integration
 - ✅ Added detection data structures (`PersonDetection`, `FaceDetection`, `DetectionResult`)
 - ✅ Created `CameraFactory` for camera selection

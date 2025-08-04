@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 from raspibot.vision.camera_selector import (
     CameraType, get_camera, is_pi_ai_available, 
-    get_available_cameras, get_recommended_camera
+    get_available_cameras, get_best_available_camera
 )
 
 
@@ -107,7 +107,7 @@ class TestCameraFactory:
 
     def test_get_camera_with_camera_mode_basic(self):
         """Test getting basic camera with camera mode parameter."""
-        with patch('raspibot.vision.camera_selector.BasicCamera') as mock_basic_class:
+        with patch('raspibot.vision.camera_selector.PiCamera') as mock_basic_class:
             mock_camera = Mock()
             mock_basic_class.return_value = mock_camera
             
@@ -158,19 +158,19 @@ class TestCameraFactory:
         assert len(cameras) == 1
 
     @patch('raspibot.vision.camera_selector.is_pi_ai_available')
-    def test_get_recommended_camera_pi_ai(self, mock_is_available):
+    def test_get_best_available_camera_pi_ai(self, mock_is_available):
         """Test getting recommended camera when Pi AI is available."""
         mock_is_available.return_value = True
         
-        recommended = get_recommended_camera()
+        recommended = get_best_available_camera()
         
         assert recommended == CameraType.PI_AI
 
     @patch('raspibot.vision.camera_selector.is_pi_ai_available')
-    def test_get_recommended_camera_webcam(self, mock_is_available):
+    def test_get_best_available_camera_webcam(self, mock_is_available):
         """Test getting recommended camera when Pi AI is not available."""
         mock_is_available.return_value = False
         
-        recommended = get_recommended_camera()
+        recommended = get_best_available_camera()
         
         assert recommended == CameraType.WEBCAM 

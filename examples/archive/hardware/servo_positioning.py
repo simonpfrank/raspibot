@@ -14,7 +14,7 @@ import argparse
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from raspibot.hardware.servo_selector import get_servo_controller, ServoControllerType
-from raspibot.config.hardware_config import (
+from raspibot.settings.config import (
     SERVO_PAN_CHANNEL, SERVO_TILT_CHANNEL,
     SERVO_PAN_MIN_ANGLE, SERVO_PAN_MAX_ANGLE, SERVO_PAN_CENTER,
     SERVO_TILT_MIN_ANGLE, SERVO_TILT_MAX_ANGLE, SERVO_TILT_CENTER

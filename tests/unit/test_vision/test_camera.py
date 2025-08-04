@@ -5,7 +5,7 @@ import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 
 from raspibot.vision.camera import Camera
-from raspibot.vision.basic_camera import BasicCamera
+from raspibot.vision.pi_camera import PiCamera
 
 
 class TestCamera:
@@ -18,7 +18,7 @@ class TestCamera:
         assert camera.device_id == 0
         assert camera.width == 1280
         assert camera.height == 480
-        assert camera.cap is None
+        assert camera.Stream is None
         assert camera.is_running is False
         assert camera.current_fps == 0.0
 
@@ -34,9 +34,9 @@ class TestCamera:
     def test_camera_start_success(self, mock_video_capture):
         """Test successful camera start."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]  # Return requested resolution
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]  # Return requested resolution
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -44,19 +44,19 @@ class TestCamera:
         
         assert result is True
         assert camera.is_running is True
-        assert camera.cap == mock_cap
+        assert camera.stream == mock_cap
         
         # Verify OpenCV calls
         mock_video_capture.assert_called_once_with(0)
-        mock_cap.set.assert_any_call(3, 1280)  # CAP_PROP_FRAME_WIDTH
-        mock_cap.set.assert_any_call(4, 480)   # CAP_PROP_FRAME_HEIGHT
+        mock.stream.set.assert_any_call(3, 1280)  # CAP_PROP_FRAME_WIDTH
+        mock.stream.set.assert_any_call(4, 480)   # CAP_PROP_FRAME_HEIGHT
 
     @patch('cv2.VideoCapture')
     def test_camera_start_failure(self, mock_video_capture):
         """Test camera start failure."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = False
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = False
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -64,7 +64,7 @@ class TestCamera:
         
         assert result is False
         assert camera.is_running is False
-        assert camera.cap is None
+        assert camera.Stream is None
 
     @patch('cv2.VideoCapture')
     def test_camera_start_exception(self, mock_video_capture):
@@ -81,9 +81,9 @@ class TestCamera:
     def test_camera_resolution_adjustment(self, mock_video_capture):
         """Test camera resolution adjustment when actual differs from requested."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [640, 360]  # Return different resolution
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [640, 360]  # Return different resolution
         mock_video_capture.return_value = mock_cap
         
         camera = Camera(width=1280, height=480)
@@ -104,10 +104,10 @@ class TestCamera:
     def test_get_frame_success(self, mock_video_capture):
         """Test successful frame capture."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
-        mock_cap.read.return_value = (True, np.zeros((480, 1280, 3), dtype=np.uint8))
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
+        mock.stream.read.return_value = (True, np.zeros((480, 1280, 3), dtype=np.uint8))
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -121,10 +121,10 @@ class TestCamera:
     def test_get_frame_failure(self, mock_video_capture):
         """Test frame capture failure."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
-        mock_cap.read.return_value = (False, None)
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
+        mock.stream.read.return_value = (False, None)
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -137,10 +137,10 @@ class TestCamera:
     def test_get_frame_exception(self, mock_video_capture):
         """Test frame capture with exception."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
-        mock_cap.read.side_effect = Exception("Read error")
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
+        mock.stream.read.side_effect = Exception("Read error")
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -175,9 +175,9 @@ class TestCamera:
     def test_is_available_started(self, mock_video_capture):
         """Test is_available when camera started."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -190,9 +190,9 @@ class TestCamera:
     def test_stop_camera(self, mock_video_capture):
         """Test camera stop."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
         mock_video_capture.return_value = mock_cap
         
         camera = Camera()
@@ -200,8 +200,8 @@ class TestCamera:
         camera.stop()
         
         assert camera.is_running is False
-        assert camera.cap is None
-        mock_cap.release.assert_called_once()
+        assert camera.Stream is None
+        mock.stream.release.assert_called_once()
 
     def test_stop_camera_not_started(self):
         """Test stop when camera not started."""
@@ -214,22 +214,22 @@ class TestCamera:
     def test_context_manager_success(self, mock_video_capture):
         """Test camera as context manager with successful start."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
         mock_video_capture.return_value = mock_cap
         
         with Camera() as camera:
             assert camera.is_running is True
         
-        mock_cap.release.assert_called_once()
+        mock.stream.release.assert_called_once()
 
     @patch('cv2.VideoCapture')
     def test_context_manager_failure(self, mock_video_capture):
         """Test camera as context manager with failed start."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = False
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = False
         mock_video_capture.return_value = mock_cap
         
         with pytest.raises(RuntimeError, match="Failed to start camera"):
@@ -241,10 +241,10 @@ class TestCamera:
     def test_fps_calculation(self, mock_time, mock_video_capture):
         """Test FPS calculation."""
         # Setup mock
-        mock_cap = Mock()
-        mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = [1280, 480]
-        mock_cap.read.return_value = (True, np.zeros((480, 1280, 3), dtype=np.uint8))
+        mock.stream = Mock()
+        mock.stream.isOpened.return_value = True
+        mock.stream.get.side_effect = [1280, 480]
+        mock.stream.read.return_value = (True, np.zeros((480, 1280, 3), dtype=np.uint8))
         mock_video_capture.return_value = mock_cap
         
         # Mock time progression - need more time values for logging
@@ -261,42 +261,42 @@ class TestCamera:
         assert camera.get_fps() == 2.0 
 
 
-class TestBasicCamera:
-    """Test BasicCamera class functionality."""
+class TestPiCamera:
+    """Test PiCamera class functionality."""
 
-    @patch('raspibot.vision.basic_camera.Picamera2')
-    def test_basic_camera_initialization_normal_video(self, mock_picamera2):
-        """Test BasicCamera initialization in normal video mode."""
+    @patch('raspibot.vision.pi_camera.Picamera2')
+    def test_pi_camera_initialization_normal_video(self, mock_picamera2):
+        """Test PiCamera initialization in normal video mode."""
         mock_picamera2_instance = Mock()
         mock_picamera2.return_value = mock_picamera2_instance
         
-        camera = BasicCamera(camera_mode="normal_video")
+        camera = PiCamera(camera_mode="normal_video")
         
         assert camera.camera_mode == "normal_video"
         assert camera.current_resolution == (1280, 720)
         assert camera.current_format == "XBGR8888"
         assert camera.current_mode == "color"
 
-    @patch('raspibot.vision.basic_camera.Picamera2')
-    def test_basic_camera_initialization_opencv_detection(self, mock_picamera2):
-        """Test BasicCamera initialization in OpenCV detection mode."""
+    @patch('raspibot.vision.pi_camera.Picamera2')
+    def test_pi_camera_initialization_opencv_detection(self, mock_picamera2):
+        """Test PiCamera initialization in OpenCV detection mode."""
         mock_picamera2_instance = Mock()
         mock_picamera2.return_value = mock_picamera2_instance
         
-        camera = BasicCamera(camera_mode="opencv_detection")
+        camera = PiCamera(camera_mode="opencv_detection")
         
         assert camera.camera_mode == "opencv_detection"
         assert camera.current_resolution == (1280, 720)
         assert camera.current_format == "XBGR8888"
         assert camera.current_mode == "grayscale"
 
-    @patch('raspibot.vision.basic_camera.Picamera2')
-    def test_basic_camera_get_camera_mode_info(self, mock_picamera2):
+    @patch('raspibot.vision.pi_camera.Picamera2')
+    def test_pi_camera_get_camera_mode_info(self, mock_picamera2):
         """Test getting camera mode information."""
         mock_picamera2_instance = Mock()
         mock_picamera2.return_value = mock_picamera2_instance
         
-        camera = BasicCamera(camera_mode="opencv_detection")
+        camera = PiCamera(camera_mode="opencv_detection")
         mode_info = camera.get_camera_mode_info()
         
         assert mode_info["camera_mode"] == "opencv_detection"
@@ -306,13 +306,13 @@ class TestBasicCamera:
         assert mode_info["display"]["format"] == "BGR"
         assert mode_info["memory_mb_per_frame"] == 0.88  # Grayscale is more efficient
 
-    @patch('raspibot.vision.basic_camera.Picamera2')
-    def test_basic_camera_get_detection_frame(self, mock_picamera2):
+    @patch('raspibot.vision.pi_camera.Picamera2')
+    def test_pi_camera_get_detection_frame(self, mock_picamera2):
         """Test getting detection frame."""
         mock_picamera2_instance = Mock()
         mock_picamera2.return_value = mock_picamera2_instance
         
-        camera = BasicCamera(camera_mode="opencv_detection")
+        camera = PiCamera(camera_mode="opencv_detection")
         camera.is_running = True
         camera.picam2 = mock_picamera2_instance
         

@@ -62,7 +62,7 @@ def get_correlation_id() -> Tuple[Optional[str], Optional[str]]:
 
 def setup_logging(name: str = "raspibot") -> logging.Logger:
     """Setup logging with custom formatter and configuration."""
-    from raspibot.config.settings import LOG_LEVEL, LOG_TO_FILE, LOG_FILE_PATH
+    from raspibot.settings.config import LOG_LEVEL, LOG_TO_FILE, LOG_FILE_PATH
     
     # Create logger
     logger = logging.getLogger(name)

@@ -17,7 +17,7 @@ This specification defines the integration of the Raspberry Pi AI Camera (IMX500
 ### Camera Abstraction Layer
 
 ```python
-class CameraInterface(ABC):
+class CameraTemplate(ABC):
     """Abstract base class for camera implementations."""
     
     @abstractmethod
@@ -49,7 +49,7 @@ class CameraInterface(ABC):
 ### Pi AI Camera Implementation
 
 ```python
-class PiAICamera(CameraInterface):
+class PiAICamera(CameraTemplate):
     """Pi AI Camera implementation using IMX500 hardware acceleration."""
     
     def __init__(self, 
@@ -115,7 +115,7 @@ class PiAIFaceDetector(FaceDetector):
 class SearchPattern:
     """Intelligent search pattern for finding people/faces."""
     
-    def __init__(self, pan_tilt: PanTiltSystem, camera: CameraInterface):
+    def __init__(self, pan_tilt: PanTiltSystem, camera: CameraTemplate):
         """Initialize search pattern system."""
     
     def spiral_search(self, center_pan: float = 0.0, center_tilt: float = 0.0, 
@@ -166,7 +166,7 @@ class FaceDetection:
 ## Implementation Phases
 
 ### Phase 1: Basic Pi AI Camera Integration
-- [ ] Create `PiAICamera` class implementing `CameraInterface`
+- [ ] Create `PiAICamera` class implementing `CameraTemplate`
 - [ ] Implement basic frame capture and metadata extraction
 - [ ] Add hardware detection parsing for COCO dataset objects
 - [ ] Create unit tests for Pi AI camera functionality

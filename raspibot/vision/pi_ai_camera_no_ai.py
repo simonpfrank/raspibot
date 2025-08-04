@@ -11,12 +11,12 @@ try:
 except ImportError:
     PICAMERA2_AVAILABLE = False
 
-from .camera_interface import CameraInterface
-from ..config.hardware_config import PI_AI_CAMERA_CONFIG
+from .camera_template import CameraTemplate
+from ..config.config import PI_AI_CAMERA_CONFIG
 from ..utils.logging_config import setup_logging
 
 
-class PiAICameraNoAI(CameraInterface):
+class PiAICameraNoAI(CameraTemplate):
     """Pi AI Camera implementation without AI functionality (camera only)."""
     
     def __init__(self, 

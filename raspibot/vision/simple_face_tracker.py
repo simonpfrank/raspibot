@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List
 from .face_detector import FaceDetector
 from .face_stability import FaceStabilityFilter
 from ..movement.pan_tilt import PanTiltSystem
-from ..config.hardware_config import FACE_MOVEMENT_THRESHOLD, FACE_MOVEMENT_SCALE
+from ..config.config import FACE_MOVEMENT_THRESHOLD, FACE_MOVEMENT_SCALE
 from ..utils.logging_config import setup_logging
 
 

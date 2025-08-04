@@ -86,7 +86,7 @@ LOG_LEVEL: Final[str] = os.getenv('RASPIBOT_LOG_LEVEL', 'INFO')
 LOG_TO_FILE: Final[bool] = os.getenv('RASPIBOT_LOG_TO_FILE', 'true').lower() == 'true'
 LOG_STACKTRACE: Final[bool] = os.getenv('RASPIBOT_LOG_STACKTRACE', 'false').lower() == 'true'
 
-# Usage: from raspibot.config.settings import DEBUG, LOG_LEVEL
+# Usage: from raspibot.settings.config import DEBUG, LOG_LEVEL
 ```
 
 **Educational Value**: Shows environment variable parsing, type hints with `Final`, string-to-boolean conversion, and module organization - all clear, standard Python patterns with no decorators or magic.

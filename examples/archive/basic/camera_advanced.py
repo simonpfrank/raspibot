@@ -15,7 +15,7 @@ import argparse
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
-from raspibot.vision.camera_selector import get_camera, CameraType
+from raspibot.hardware.cameras.camera_selector import get_camera, CameraType
 from raspibot.vision.display_manager import DisplayManager
 
 

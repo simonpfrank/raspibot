@@ -1,5 +1,7 @@
 # Raspibot
 
+**Code is changing a lot so not worth downloading yet**
+
 A hobby development of simple robotics on a Raspberry Pi 5.
 
 ## Project Aims
@@ -28,7 +30,7 @@ A hobby development of simple robotics on a Raspberry Pi 5.
 ./scripts/setup/install_dependencies.sh
 
 # Run a basic example
-python examples/basic/camera_capture.py
+python examples/cameras/picamera2_basic.py.py
 ```
 
 ### Learning Path
@@ -46,14 +48,10 @@ raspibot/
 │   ├── core/                    # Core application logic
 │   └── utils/                   # Utility functions
 ├── examples/                    # Educational examples
-│   ├── basic/                   # Simple, single-concept examples
-│   ├── advanced/                # Complete feature demonstrations
-│   └── hardware/                # Hardware-specific tutorials
+│   ├── camera/                   # Simple, single-concept examples
 ├── scripts/                     # Production utilities
-│   ├── setup/                   # Installation and setup
-│   ├── maintenance/             # System maintenance
 │   └── utilities/               # Operational tools
-└── tests/                       # Test suite
+└── tests/                       # Test suite **Out of date**
 ```
 
 ## Hardware Requirements
@@ -64,7 +62,7 @@ raspibot/
 * Adafruit mini Pan and Tilt kit with micro servos assembled
 
 ### Phase 2
-* Raspberry Pi AI Camera or Pi Camera 3
+* Raspberry Pi AI Camera
 
 ### Phase 3
 * Multi mic array (to be chosen)

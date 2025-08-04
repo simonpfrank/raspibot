@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List
 from .simple_face_tracker import SimpleFaceTracker
 from .search_pattern import SearchPattern, SearchDirection
 from ..movement.pan_tilt import PanTiltSystem
-from ..config.hardware_config import SLEEP_TIMEOUT, SEARCH_PATTERN_ENABLED
+from ..config.config import SLEEP_TIMEOUT, SEARCH_PATTERN_ENABLED
 from ..utils.logging_config import setup_logging
 
 

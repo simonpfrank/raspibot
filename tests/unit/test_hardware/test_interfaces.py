@@ -15,7 +15,7 @@ class TestServoController:
 
     def test_servo_controller_raises_not_implemented(self):
         """Test that ServoController methods raise NotImplementedError."""
-        from raspibot.hardware.interfaces import ServoController
+        from raspibot.hardware.servos.servo_interface import ServoController
         
         controller = ServoController()
         
@@ -33,7 +33,7 @@ class TestServoController:
 
     def test_servo_controller_subclass_works(self):
         """Test that a subclass can override the methods."""
-        from raspibot.hardware.interfaces import ServoController
+        from raspibot.hardware.servos.servo_interface import ServoController
         
         class MockServoController(ServoController):
             def set_angle(self, channel: int, angle: float) -> None:
@@ -65,7 +65,7 @@ class TestServoController:
 
     def test_servo_controller_documentation(self):
         """Test that ServoController has proper documentation."""
-        from raspibot.hardware.interfaces import ServoController
+        from raspibot.hardware.servos.servo_interface import ServoController
         
         assert ServoController.__doc__ is not None
         assert "Hardware interface for servo control" in ServoController.__doc__
@@ -77,12 +77,12 @@ class TestServoController:
         assert ServoController.shutdown.__doc__ is not None
 
 
-class TestCameraInterface:
+class TestCameraTemplate:
     """Test the Camera interface class."""
 
     def test_camera_raises_not_implemented(self):
         """Test that Camera methods raise NotImplementedError."""
-        from raspibot.hardware.interfaces import Camera
+        from raspibot.hardware.servos.servo_interface import Camera
         
         camera = Camera()
         
@@ -100,7 +100,7 @@ class TestCameraInterface:
 
     def test_camera_subclass_works(self):
         """Test that a subclass can override the methods."""
-        from raspibot.hardware.interfaces import Camera
+        from raspibot.hardware.servos.servo_interface import Camera
         
         class MockCamera(Camera):
             def capture_frame(self):
