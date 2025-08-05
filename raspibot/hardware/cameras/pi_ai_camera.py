@@ -13,6 +13,7 @@ import numpy as np
 from typing import Optional, Tuple, List, Dict, Any
 from functools import lru_cache
 from enum import Enum
+from collections import Counter
 import cv2
 
 
@@ -57,7 +58,7 @@ class PiAICamera(CameraTemplate):
                 iou_threshold: Optional[float] = None,
                 max_detections: Optional[int] = None,
                 inference_frame_rate: Optional[int] = None,
-                display_mode: Optional[str] = "none", # in case, change config to set default
+                display_mode: Optional[str] = None, # in case, change config to set default
                 )->None:
 
 
@@ -81,6 +82,7 @@ class PiAICamera(CameraTemplate):
             raise ImportError("picamera2 not available. Pi AI camera requires picamera2 library.")
         
         self.logger = setup_logging(__name__)
+
         
         # a kwarg overrides the default settings in config.py
         self.model_path = model_path or AI_DEFAULT_VISION_MODEL
@@ -94,9 +96,13 @@ class PiAICamera(CameraTemplate):
         self.camera_device_id = camera_device_id or AI_CAMERA_DEVICE_ID
         self.display_mode = display_mode or PI_DISPLAY_MODE
         self.detections = []
-        self.detecting = False
+        self.is_detecting = False
         self.is_running = False
         self.tracked_objects = []
+
+        print(PI_DISPLAY_MODE)
+        print(display_mode)
+        print(self.display_mode)
 
         # The camera preview uses QT which needs the correct settings for non direct connected screens
         if self.display_mode == "connect":
@@ -155,7 +161,8 @@ class PiAICamera(CameraTemplate):
             True if camera started successfully, False otherwise.
         """
         try:
-            
+            print(self.display_mode)
+            print(display_modes[self.display_mode])
             self.logger.info(f"Starting Preview")
             self.camera.start_preview(display_modes[self.display_mode],x=self.display_position[0],y=self.display_position[1],width=self.display_resolution[0],height=self.display_resolution[1]) 
             self.logger.info(f"Starting Camera")
@@ -185,17 +192,24 @@ class PiAICamera(CameraTemplate):
             self.logger.error(f"Error starting Pi AI Camera: {e}")
             return False
 
+    def stop(self):
+        if self.camera is not None and self.is_running:
+            self.is_detecting = False
+            self.camera.stop()
+
+
     def shutdown(self) -> None:
         """Stop camera capture and release resources.
         - ensures detection thread is stopped by setting self.dectecting to False
         """
         try:
             if self.camera is not None:
-                self.detecting = False
+                self.is_detecting = False
                 self.camera.stop()
                 self.camera.close()
                 
                 self.is_running = False
+                self.camera = None
             
             self.logger.info("Pi AI Camera stopped")
             
@@ -293,23 +307,217 @@ class PiAICamera(CameraTemplate):
         except (TypeError, ValueError) as e:
             return False
         
-        
         size_similarity = min(detection1['box'][2], detection2['box'][2]) / max(detection1['box'][2], detection2['box'][2])
        
-        
         result =  detection1['label'] == detection2['label'] and x_difference < position_threshold and y_difference < position_threshold and size_similarity > size_threshold
-        
-        print(f"{detection1['label']},{detection2['label']},{x_difference},{y_difference},{size_similarity}",flush=True)
-        print(result,flush=True)
+        if detection1['label'] == detection2['label'] and detection1['label'] == 'cat':
+            #print(f"{detection1['label']},{detection2['label']},{x_difference},{y_difference},{size_similarity}",flush=True)
+            #print(result,flush=True)
+            pass
         return result
- 
+    
+    def deduplicate_detections(self, detections: List[Dict[str, Any]], 
+                          overlap_threshold: float = DETECTION_OVERLAP_THRESHOLD) -> List[Dict[str, Any]]:
+        """Deduplicate object detections by removing contained boxes and high-overlap boxes.
+        
+        Args:
+            detections: List of detection dicts with 'box' key containing [x, y, w, h]
+            overlap_threshold: Overlap percentage threshold (0.0-1.0) for considering duplicates
+            
+        Returns:
+            Filtered list of detections with duplicates removed
+        """
+        if not detections:
+            return []
+        
+        # Group detections by label
+        label_groups = {}
+        for detection in detections:
+            label = detection['label']
+            if label not in label_groups:
+                label_groups[label] = []
+            label_groups[label].append(detection)
+        
+        # Process each label group separately
+        result = []
+        for label, group_detections in label_groups.items():
+            if len(group_detections) == 1:
+                result.append(group_detections[0])
+                continue
+                
+            # Sort by area (smallest first) to prioritize smaller detections
+            sorted_group = sorted(group_detections, key=lambda d: d['box'][2] * d['box'][3])
+            kept_in_group = []
+            
+            for current in sorted_group:
+                should_keep = True
+                current_box = current['box']
+                
+                for kept in kept_in_group:
+                    kept_box = kept['box']
+                    
+                    # Check containment
+                    if self._is_contained(current_box, kept_box) or self._is_contained(kept_box, current_box):
+                        should_keep = False
+                        break
+                    
+                    # Check overlap
+                    if self._overlap_percentage(current_box, kept_box) >= overlap_threshold:
+                        should_keep = False
+                        break
+                
+                if should_keep:
+                    kept_in_group.append(current)
+            
+            result.extend(kept_in_group)
+        
+        return result
 
-    def track_detections(self,current_detections:List[Dict[str, Any]], tracked_objects:List[Dict[str, Any]], max_frames_missing:int=25, max_history:int=10)->List[Dict[str, Any]]:
+
+    def _is_contained(self, box1: List[int], box2: List[int]) -> bool:
+        """Check if box1 is completely contained within box2."""
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+        return (x1 >= x2 and y1 >= y2 and 
+                x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2)
+
+
+    def _overlap_percentage(self, box1: List[int], box2: List[int]) -> float:
+        """Calculate overlap percentage between two bounding boxes."""
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+        
+        # Calculate intersection
+        left = max(x1, x2)
+        top = max(y1, y2)
+        right = min(x1 + w1, x2 + w2)
+        bottom = min(y1 + h1, y2 + h2)
+        
+        if left >= right or top >= bottom:
+            return 0.0
+        
+        intersection_area = (right - left) * (bottom - top)
+        smaller_area = min(w1 * h1, w2 * h2)
+        
+        return intersection_area / smaller_area if smaller_area > 0 else 0.0
+
+    def _clamp_box_to_frame1(self, box: List[int]) -> List[int]:
+        """Clamp box coordinates to ensure they don't exceed frame boundaries.
+        
+        Args:
+            box: [x, y, width, height] bounding box
+            
+        Returns:
+            Clamped box coordinates that fit within display frame
+        """
+        x, y, w, h = box
+        display_width, display_height = self.display_resolution  # 1280x720
+        
+        # Clamp x and y to frame boundaries
+        x = max(0, min(x, display_width - 1))
+        y = max(0, min(y, display_height - 1))
+        
+        # Clamp width and height to ensure box doesn't extend beyond frame
+        w = min(w, display_width - x)
+        h = min(h, display_height - y)
+        
+        return [x, y, w, h]
+
+    def _is_contained1(self, box1: List[int], box2: List[int]) -> bool:
+        """Check if box1 is completely contained within box2 with boundary clamping."""
+        # Clamp both boxes to frame boundaries first
+        x1, y1, w1, h1 = self._clamp_box_to_frame1(box1)
+        x2, y2, w2, h2 = self._clamp_box_to_frame1(box2)
+        
+        # Now check containment with properly clamped boxes
+        return (x1 >= x2 and y1 >= y2 and 
+                x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2)
+
+    def _overlap_percentage1(self, box1: List[int], box2: List[int]) -> float:
+        """Calculate overlap percentage using IoU (Intersection over Union) with boundary clamping."""
+        # Clamp both boxes to frame boundaries first
+        x1, y1, w1, h1 = self._clamp_box_to_frame1(box1)
+        x2, y2, w2, h2 = self._clamp_box_to_frame1(box2)
+        
+        # Calculate intersection with clamped boxes
+        left = max(x1, x2)
+        top = max(y1, y2)
+        right = min(x1 + w1, x2 + w2)
+        bottom = min(y1 + h1, y2 + h2)
+        
+        if left >= right or top >= bottom:
+            return 0.0
+        
+        intersection_area = (right - left) * (bottom - top)
+        area1 = w1 * h1
+        area2 = w2 * h2
+        union_area = area1 + area2 - intersection_area
+        
+        return intersection_area / union_area if union_area > 0 else 0.0
+
+    def deduplicate_detections1(self, detections: List[Dict[str, Any]], 
+                              overlap_threshold: float = 0.66) -> List[Dict[str, Any]]:
+        """Deduplicate object detections using boundary clamping and IoU overlap calculation.
+        
+        Args:
+            detections: List of detection dicts with 'box' key containing [x, y, w, h]
+            overlap_threshold: IoU threshold (0.0-1.0) for considering duplicates
+            
+        Returns:
+            Filtered list of detections with duplicates removed
+        """
+        if not detections:
+            return []
+        
+        # Group detections by label
+        label_groups = {}
+        for detection in detections:
+            label = detection['label']
+            if label not in label_groups:
+                label_groups[label] = []
+            label_groups[label].append(detection)
+        
+        # Process each label group separately
+        result = []
+        for label, group_detections in label_groups.items():
+            if len(group_detections) == 1:
+                result.append(group_detections[0])
+                continue
+                
+            # Sort by area (smallest first) to prioritize smaller detections
+            sorted_group = sorted(group_detections, key=lambda d: d['box'][2] * d['box'][3])
+            kept_in_group = []
+            
+            for current in sorted_group:
+                should_keep = True
+                current_box = current['box']
+                
+                for kept in kept_in_group:
+                    kept_box = kept['box']
+                    
+                    # Check containment with boundary clamping
+                    if self._is_contained1(current_box, kept_box) or self._is_contained1(kept_box, current_box):
+                        should_keep = False
+                        break
+                    
+                    # Check overlap using IoU
+                    if self._overlap_percentage1(current_box, kept_box) >= overlap_threshold:
+                        should_keep = False
+                        break
+                
+                if should_keep:
+                    kept_in_group.append(current)
+            
+            result.extend(kept_in_group)
+        
+        return result
+
+    def track_detections(self,detections:List[Dict[str, Any]], tracked_objects:List[Dict[str, Any]], max_frames_missing:int=25, max_history:int=10)->List[Dict[str, Any]]:
         """
         Track detections across frames and assign IDs to similar objects.
         
         Args:
-            current_detections: List of Detection objects from current frame
+            detections: List of Detection objects from current frame
             tracked_objects: List of tracked objects from previous frames
             max_frames_missing: How many frames an object can be missing before being removed
             max_history: Maximum number of detections to store per tracked object
@@ -320,9 +528,11 @@ class PiAICamera(CameraTemplate):
         # Mark all tracked objects as not seen in this frame
         for tracked_object in tracked_objects:
             tracked_object['seen_this_frame'] = False
+
+        detections = self.deduplicate_detections1(detections)
         
         # Try to match current detections to existing tracked objects
-        for detection in current_detections:
+        for detection in detections:
             if detection is None:
                 continue
                 
@@ -366,12 +576,12 @@ class PiAICamera(CameraTemplate):
         return tracked_objects
 
     def detect(self):
-        """Main detection which will run as long as self.detecting is True.
+        """Main detection which will run as long as self.is_detecting is True.
         """
-        self.detecting = True
+        self.is_detecting = True
         tracked_objects = []
         
-        while self.detecting:
+        while self.is_detecting:
             metadata = self.camera.capture_metadata()
             self.fps = self.calculate_fps(metadata)
             boxes, scores, classes = self.get_detections(metadata)
@@ -388,8 +598,10 @@ class PiAICamera(CameraTemplate):
             
             # Stop if preview object no longer exists (e.g when closed)
             if  not self.camera._preview:
-                self.detecting = False
+                self.is_detecting = False
+                self.logger.info('Preview closed')
                 break
+        self.stop()
     
     # Screen annotation functions that will be called by cam_objpost_callback
 
@@ -401,8 +613,8 @@ class PiAICamera(CameraTemplate):
         - y is the y position
         - returns new x and y position and text width and height
         """
-        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-        cv2.putText(m.array, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        (text_width, text_height), baseline = cv2.getTextSize(text, DEFAULT_SCREEN_FONT, DEFAULT_SCREEN_FONT_SIZE, DEFAULT_SCREEN_FONT_THIKCNESS)
+        cv2.putText(m.array, text, (x, y), DEFAULT_SCREEN_FONT, DEFAULT_SCREEN_FONT_SIZE, DEFAULT_SCREEN_FONT_COLOUR, DEFAULT_SCREEN_FONT_THIKCNESS)
         new_x = x + text_width + 10
         new_y = y + text_height + 10
         return new_x, new_y,text_width,text_height
@@ -418,7 +630,7 @@ class PiAICamera(CameraTemplate):
             # Create a copy of the array to draw the background with opacity
             overlay = m.array.copy()
             # Draw the background rectangle on the overlay
-            (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            (text_width, text_height), baseline = cv2.getTextSize(label, DEFAULT_SCREEN_FONT, DEFAULT_SCREEN_FONT_SIZE, DEFAULT_SCREEN_FONT_THIKCNESS)
             text_x = x+5
             text_y = y+10
             cv2.rectangle(overlay,(text_x, text_y+10 - text_height),(text_x + text_width, text_y + baseline),(0, 0, 0),  cv2.FILLED)

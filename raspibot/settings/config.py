@@ -5,6 +5,7 @@ device addresses, and operational limits for the Raspibot hardware.
 """
 import os
 from typing import Final, Dict,Tuple
+import cv2
 
 # Application settings loaded from environment
 DEBUG: Final[bool] = os.getenv('RASPIBOT_DEBUG', 'false').lower() == 'true'
@@ -13,7 +14,13 @@ LOG_TO_FILE: Final[bool] = os.getenv('RASPIBOT_LOG_TO_FILE', 'true').lower() == 
 LOG_STACKTRACE: Final[bool] = os.getenv('RASPIBOT_LOG_STACKTRACE', 'false').lower() == 'true'
 LOG_FILE_PATH: Final[str] = os.getenv('RASPIBOT_LOG_FILE_PATH', 'data/logs/raspibot.log') 
 
-PI_DISPLAY_MODE: Final[str] = "connect" # screen, connect, ssh, none
+PI_DISPLAY_MODE = "connect" # screen, connect, ssh, none
+# Video display
+DEFAULT_SCREEN_FONT = cv2.FONT_HERSHEY_DUPLEX
+DEFAULT_SCREEN_FONT_SIZE = 1
+DEFAULT_SCREEN_FONT_COLOUR = (255,255,255)
+DEFAULT_SCREEN_FONT_THIKCNESS = 1
+
 
 # I2C Configuration
 I2C_BUS: Final[int] = 1  # Standard I2C bus on Raspberry Pi
@@ -114,11 +121,12 @@ GPIO_SERVO_PINS: Final[Dict[int, int]] = {
 
 # Pi AI Camera Configuration
 AI_DEFAULT_VISION_MODEL: Final[str] = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
-AI_CAMERA_RESOLUTION: Final[Tuple[int, int]] = (1280, 720)
+AI_CAMERA_RESOLUTION: Final[Tuple[int, int]] = (2028, 1520)
 CAMERA_DISPLAY_RESOLUTION: Final[Tuple[int, int]] = (1280, 720)
 CAMERA_DISPLAY_POSITION: Final[Tuple[int, int]] = (5, 10)
-AI_DETECTION_THRESHOLD: Final[float] = 0.4
-AI_IOU_THRESHOLD: Final[float] = 0.65
+AI_DETECTION_THRESHOLD: Final[float] = 0.48
+AI_IOU_THRESHOLD: Final[float] = 0.8
+DETECTION_OVERLAP_THRESHOLD = .6
 AI_MAX_DETECTIONS: Final[int] = 20
 AI_CAMERA_DEVICE_ID: Final[int] = 0
 AI_INFERERENCE_FRAME_RATE: Final[int] = 30
