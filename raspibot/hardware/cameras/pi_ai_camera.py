@@ -316,6 +316,212 @@ class PiAICamera(CameraTemplate):
             pass
         return result
     
+    def calculate_iou(self, box1: List[int], box2: List[int]) -> float:
+        """Standard Intersection over Union calculation.
+        
+        Args:
+            box1: [x, y, width, height] bounding box
+            box2: [x, y, width, height] bounding box
+            
+        Returns:
+            IoU value between 0.0 and 1.0
+        """
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+        
+        # Calculate intersection coordinates
+        left = max(x1, x2)
+        top = max(y1, y2) 
+        right = min(x1 + w1, x2 + w2)
+        bottom = min(y1 + h1, y2 + h2)
+        
+        # No intersection
+        if left >= right or top >= bottom:
+            return 0.0
+        
+        # Calculate areas
+        intersection_area = (right - left) * (bottom - top)
+        area1 = w1 * h1
+        area2 = w2 * h2
+        union_area = area1 + area2 - intersection_area
+        
+        return intersection_area / union_area if union_area > 0 else 0.0
+
+    def filter_valid_boxes(self, detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter out boxes that are too large or too small.
+        
+        Args:
+            detections: List of detection dictionaries with 'box' key
+            
+        Returns:
+            Filtered list of detections
+        """
+        if not detections:
+            return []
+        
+        camera_width, camera_height = self.camera_resolution  # (2028, 1520)
+        total_area = camera_width * camera_height
+        max_area = total_area * 0.8  # 80% of frame
+        min_area = 100  # 10x10 pixels minimum
+        
+        valid_detections = []
+        for detection in detections:
+            x, y, w, h = detection['box']
+            area = w * h
+            
+            # Filter by area
+            if min_area <= area <= max_area:
+                # Filter by reasonable aspect ratio (0.1 to 10.0)
+                aspect_ratio = w / h if h > 0 else 0
+                if 0.1 <= aspect_ratio <= 10.0:
+                    valid_detections.append(detection)
+                else:
+                    self.logger.debug(f"Filtered box with bad aspect ratio: {aspect_ratio:.2f}")
+            else:
+                self.logger.debug(f"Filtered box with area {area} (min: {min_area}, max: {max_area:.0f})")
+        
+        return valid_detections
+
+    def apply_nms(self, detections: List[Dict[str, Any]], iou_threshold: float = 0.5) -> List[Dict[str, Any]]:
+        """Apply Non-Maximum Suppression to remove duplicate detections.
+        
+        Args:
+            detections: List of detection dictionaries with 'box' and 'score' keys
+            iou_threshold: IoU threshold for suppression (0.0-1.0)
+            
+        Returns:
+            Filtered list of detections after NMS
+        """
+        if not detections:
+            return []
+        
+        # Filter out invalid boxes first
+        valid_detections = self.filter_valid_boxes(detections)
+        if not valid_detections:
+            return []
+        
+        # Group detections by label
+        label_groups = {}
+        for detection in valid_detections:
+            label = detection['label']
+            if label not in label_groups:
+                label_groups[label] = []
+            label_groups[label].append(detection)
+        
+        # Apply NMS to each label group
+        result = []
+        for label, group_detections in label_groups.items():
+            if len(group_detections) == 1:
+                result.append(group_detections[0])
+                continue
+            
+            # Sort by confidence score (highest first)
+            sorted_detections = sorted(group_detections, key=lambda d: d['score'], reverse=True)
+            
+            # Greedy NMS algorithm
+            kept_detections = []
+            while sorted_detections:
+                # Take the highest scoring detection
+                current = sorted_detections.pop(0)
+                kept_detections.append(current)
+                
+                # Remove all detections that overlap significantly
+                remaining = []
+                for detection in sorted_detections:
+                    iou = self.calculate_iou(current['box'], detection['box'])
+                    if iou < iou_threshold:
+                        remaining.append(detection)
+                    else:
+                        self.logger.debug(f"NMS suppressed {detection['label']} with IoU {iou:.3f}")
+                
+                sorted_detections = remaining
+            
+            result.extend(kept_detections)
+        
+        return result
+
+    def associate_detections_to_tracks(self, detections: List[Dict[str, Any]], 
+                                     tracked_objects: List[Dict[str, Any]], 
+                                     iou_threshold: float = 0.3) -> List[Dict[str, Any]]:
+        """Associate current detections with existing tracked objects.
+        
+        Args:
+            detections: Current frame detections after NMS
+            tracked_objects: Existing tracked objects from previous frames
+            iou_threshold: IoU threshold for association
+            
+        Returns:
+            Updated list of tracked objects
+        """
+        # Mark all tracked objects as not seen in this frame
+        for tracked_object in tracked_objects:
+            tracked_object['seen_this_frame'] = False
+        
+        # Try to associate each detection with existing tracks
+        unmatched_detections = []
+        
+        for detection in detections:
+            best_match = None
+            best_iou = 0.0
+            
+            # Find best matching track
+            for tracked_object in tracked_objects:
+                if not tracked_object.get('last_detection'):
+                    continue
+                    
+                # Only match same object types
+                if tracked_object['label'] != detection['label']:
+                    continue
+                    
+                # Skip already matched tracks
+                if tracked_object['seen_this_frame']:
+                    continue
+                
+                # Calculate IoU with last known position
+                iou = self.calculate_iou(detection['box'], tracked_object['last_detection']['box'])
+                
+                if iou > iou_threshold and iou > best_iou:
+                    best_match = tracked_object
+                    best_iou = iou
+            
+            # Update matched track or mark as unmatched
+            if best_match:
+                best_match['last_detection'] = detection
+                best_match['seen_this_frame'] = True
+                best_match['seen_count'] = best_match.get('seen_count', 0) + 1
+                best_match['frames_missing'] = 0
+            else:
+                unmatched_detections.append(detection)
+        
+        # Create new tracks for unmatched detections
+        for detection in unmatched_detections:
+            new_track = {
+                'id': len(tracked_objects),
+                'last_detection': detection,
+                'label': detection['label'],
+                'seen_this_frame': True,
+                'seen_count': 1,
+                'frames_missing': 0
+            }
+            tracked_objects.append(new_track)
+        
+        # Update missing frames and remove old tracks
+        max_frames_missing = 25
+        updated_tracks = []
+        
+        for tracked_object in tracked_objects:
+            if tracked_object['seen_this_frame']:
+                updated_tracks.append(tracked_object)
+            elif tracked_object['frames_missing'] < max_frames_missing:
+                tracked_object['frames_missing'] += 1
+                updated_tracks.append(tracked_object)
+            else:
+                self.logger.debug(f"Removing old track ID {tracked_object['id']} for {tracked_object['label']}")
+        
+        return updated_tracks
+    
+    # DEPRECATED: Replaced by apply_nms() 
+    # This method used intersection over smaller area instead of standard IoU
     def deduplicate_detections(self, detections: List[Dict[str, Any]], 
                           overlap_threshold: float = DETECTION_OVERLAP_THRESHOLD) -> List[Dict[str, Any]]:
         """Deduplicate object detections by removing contained boxes and high-overlap boxes.
@@ -374,6 +580,7 @@ class PiAICamera(CameraTemplate):
         return result
 
 
+    # DEPRECATED: Not needed with proper NMS
     def _is_contained(self, box1: List[int], box2: List[int]) -> bool:
         """Check if box1 is completely contained within box2."""
         x1, y1, w1, h1 = box1
@@ -382,6 +589,7 @@ class PiAICamera(CameraTemplate):
                 x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2)
 
 
+    # DEPRECATED: Replaced by calculate_iou()
     def _overlap_percentage(self, box1: List[int], box2: List[int]) -> float:
         """Calculate overlap percentage between two bounding boxes."""
         x1, y1, w1, h1 = box1
@@ -401,6 +609,7 @@ class PiAICamera(CameraTemplate):
         
         return intersection_area / smaller_area if smaller_area > 0 else 0.0
 
+    # DEPRECATED: Boundary handling moved to filter_valid_boxes()
     def _clamp_box_to_frame1(self, box: List[int]) -> List[int]:
         """Clamp box coordinates to ensure they don't exceed frame boundaries.
         
@@ -423,6 +632,7 @@ class PiAICamera(CameraTemplate):
         
         return [x, y, w, h]
 
+    # DEPRECATED: Not needed with proper NMS
     def _is_contained1(self, box1: List[int], box2: List[int]) -> bool:
         """Check if box1 is completely contained within box2 with boundary clamping."""
         # Clamp both boxes to frame boundaries first
@@ -433,6 +643,7 @@ class PiAICamera(CameraTemplate):
         return (x1 >= x2 and y1 >= y2 and 
                 x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2)
 
+    # DEPRECATED: Replaced by calculate_iou()
     def _overlap_percentage1(self, box1: List[int], box2: List[int]) -> float:
         """Calculate overlap percentage using IoU (Intersection over Union) with boundary clamping."""
         # Clamp both boxes to frame boundaries first
@@ -455,6 +666,8 @@ class PiAICamera(CameraTemplate):
         
         return intersection_area / union_area if union_area > 0 else 0.0
 
+    # DEPRECATED: Replaced by apply_nms()
+    # This was an improved version but still mixed boundary clamping with NMS
     def deduplicate_detections1(self, detections: List[Dict[str, Any]], 
                               overlap_threshold: float = 0.66) -> List[Dict[str, Any]]:
         """Deduplicate object detections using boundary clamping and IoU overlap calculation.
@@ -512,6 +725,9 @@ class PiAICamera(CameraTemplate):
         
         return result
 
+    # DEPRECATED: Replaced by apply_nms() and associate_detections_to_tracks()
+    # This method mixed frame-level deduplication with cross-frame tracking
+    # The new approach separates these concerns for better maintainability
     def track_detections(self,detections:List[Dict[str, Any]], tracked_objects:List[Dict[str, Any]], max_frames_missing:int=25, max_history:int=10)->List[Dict[str, Any]]:
         """
         Track detections across frames and assign IDs to similar objects.
@@ -574,6 +790,7 @@ class PiAICamera(CameraTemplate):
                 tracked_object['frames_missing'] += 1
         
         return tracked_objects
+    # END DEPRECATED track_detections method
 
     def detect(self):
         """Main detection which will run as long as self.is_detecting is True.
@@ -587,14 +804,21 @@ class PiAICamera(CameraTemplate):
             boxes, scores, classes = self.get_detections(metadata)
             if boxes is None:
                 continue
-            detections = self.convert_detection_to_dict(boxes, scores, classes, metadata)
-            if not detections:
+            # Convert raw detections to dictionaries
+            raw_detections = self.convert_detection_to_dict(boxes, scores, classes, metadata)
+            if not raw_detections:
                 continue
-            # Filter out detections below the confidence threshold
-            self.detections =[detection for detection in detections if detection['score'] > self.confidence_threshold]
-            # Pass to tracked objects to compare simnialrity between frames and identify objects
-            # from frame to frame and also cache for a few frames to allow for tracking
-            self.tracked_objects = self.track_detections(self.detections, tracked_objects)
+
+            # Filter by confidence threshold
+            confidence_filtered = [detection for detection in raw_detections if detection['score'] > self.confidence_threshold]
+            if not confidence_filtered:
+                continue
+
+            # Apply NMS to remove duplicate detections within the frame
+            self.detections = self.apply_nms(confidence_filtered, iou_threshold=NMS_IOU_THRESHOLD)
+
+            # Associate detections with existing tracks across frames
+            self.tracked_objects = self.associate_detections_to_tracks(self.detections, tracked_objects, iou_threshold=TRACKING_IOU_THRESHOLD)
             
             # Stop if preview object no longer exists (e.g when closed)
             if  not self.camera._preview:
