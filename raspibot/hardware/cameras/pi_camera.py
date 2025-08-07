@@ -13,11 +13,10 @@ import numpy as np
 from picamera2 import Picamera2, Preview
 from libcamera import Transform, ColorSpace
 
-from .camera_template import CameraTemplate
 from raspibot.utils.logging_config import setup_logging
 
 
-class PiCamera(CameraTemplate):
+class PiCamera:
     """
     Basic camera implementation for non-AI operations.
     
@@ -39,7 +38,7 @@ class PiCamera(CameraTemplate):
         """
         self.logger = setup_logging(__name__)
         self.camera_num = camera_num
-        self.picam2: Optional[Picamera2] = None
+        self.camera: Optional[Picamera2] = None
         self.is_running = False
         
         # Camera mode configuration
@@ -65,7 +64,7 @@ class PiCamera(CameraTemplate):
     def _initialize_camera(self) -> None:
         """Initialize the camera hardware."""
         try:
-            self.picam2 = Picamera2(self.camera_num)
+            self.camera = Picamera2(self.camera_num)
             self.logger.info("PiCamera initialized successfully")
         except Exception as e:
             self.logger.error(f"PiCamera._initialize_camera failed: {type(e).__name__}: {e}")
@@ -78,7 +77,7 @@ class PiCamera(CameraTemplate):
         Returns:
             True if camera started successfully, False otherwise
         """
-        if self.picam2 is None:
+        if self.camera is None:
             self.logger.error("Camera not initialized")
             return False
         
@@ -87,8 +86,8 @@ class PiCamera(CameraTemplate):
             
             # Create configuration based on current settings
             config = self._create_configuration()
-            self.picam2.configure(config)
-            self.picam2.start()
+            self.camera.configure(config)
+            self.camera.start()
             
             self.is_running = True
             self.fps_start_time = time.time()
@@ -118,7 +117,7 @@ class PiCamera(CameraTemplate):
             # Use a raw format for grayscale to get maximum resolution
             main_config["format"] = "YUV420"  # Y channel will be our grayscale
         
-        config = self.picam2.create_preview_configuration(
+        config = self.camera.create_preview_configuration(
             main=main_config,
             buffer_count=4  # More buffers for smoother operation
         )
@@ -209,7 +208,7 @@ class PiCamera(CameraTemplate):
         
         try:
             # Capture frame
-            frame = self.picam2.capture_array("main")
+            frame = self.camera.capture_array("main")
             
             if frame is not None:
                 import cv2
@@ -250,7 +249,7 @@ class PiCamera(CameraTemplate):
         
         try:
             # Capture frame
-            frame = self.picam2.capture_array("main")
+            frame = self.camera.capture_array("main")
             
             if frame is not None:
                 import cv2
@@ -315,13 +314,13 @@ class PiCamera(CameraTemplate):
         Returns:
             True if camera is available
         """
-        return self.picam2 is not None
+        return self.camera is not None
     
     def stop(self) -> None:
         """Stop the camera."""
         try:
             if self.picam2 is not None and self.is_running:
-                self.picam2.stop()
+                self.camera.stop()
                 self.is_running = False
                 self.logger.info("PiCamera stopped")
         except Exception as e:
@@ -332,8 +331,8 @@ class PiCamera(CameraTemplate):
         try:
             self.stop()
             if self.picam2 is not None:
-                self.picam2.close()
-                self.picam2 = None
+                self.camera.close()
+                self.camera = None
                 self.logger.info("PiCamera shutdown")
         except Exception as e:
             self.logger.error(f"PiCamera.shutdown failed: {type(e).__name__}: {e}")
@@ -370,7 +369,7 @@ class PiCamera(CameraTemplate):
             return False
         
         try:
-            self.picam2.capture_file(filename)
+            self.camera.capture_file(filename)
             self.logger.info(f"Image captured to {filename}")
             return True
         except Exception as e:

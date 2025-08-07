@@ -25,7 +25,6 @@ try:
 except ImportError:
     PICAMERA2_AVAILABLE = False
 
-from .camera_template import CameraTemplate
 from raspibot.settings.config import *
 from raspibot.utils.logging_config import setup_logging
 
@@ -37,7 +36,7 @@ display_modes = {
 }
 
 
-class PiAICamera(CameraTemplate):
+class PiAICamera:
     """Pi AI Camera implementation using IMX500 hardware acceleration. 
     Based on the Sony IMX500 camera example code. 
     https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/imx500_object_detection_demo.py

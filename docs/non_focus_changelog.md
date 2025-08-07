@@ -37,3 +37,19 @@ Initial setup of development documentation and change tracking system.
 
 ### Summary
 Cleaned up camera module following review recommendations. Removed 270+ lines of deprecated code from PiAICamera and standardized error handling patterns across all camera classes. All changes tested successfully with existing experiment scripts.
+
+---
+
+## 2025-08-07 - Main Task: Complete Camera Module Architectural Refactoring  
+
+### Unexpected Changes Made
+- **File**: raspibot/hardware/cameras/camera_template.py, **Lines**: all, **Reason**: Removed entire file - eliminated unnecessary template inheritance pattern
+- **File**: raspibot/hardware/cameras/camera_selector.py, **Lines**: all, **Reason**: Removed complex factory class, replaced with simple function
+- **File**: raspibot/hardware/cameras/usb_camera.py, **Lines**: all, **Reason**: Completely rewritten to use Picamera2 instead of complex OpenCV detection (444 lines -> 174 lines)
+- **File**: raspibot/hardware/cameras/pi_camera.py, **Lines**: multiple, **Reason**: Removed template inheritance, renamed picam2 -> camera for consistency
+- **File**: raspibot/hardware/cameras/pi_ai_camera.py, **Lines**: multiple, **Reason**: Removed template inheritance, no other changes needed
+- **File**: raspibot/hardware/cameras/__init__.py, **Lines**: all, **Reason**: Updated to use unified camera system with backward compatibility
+- **File**: raspibot/hardware/cameras/unified_camera.py, **Lines**: all, **Reason**: New unified camera interface using Picamera2.global_camera_info()
+
+### Summary
+Completed full architectural refactoring of camera module. Eliminated template inheritance pattern, unified all cameras to use Picamera2, simplified USB camera detection from 444 lines to 174 lines using Picamera2.global_camera_info(). All camera classes now use simple concrete inheritance-free design. Maintained full backward compatibility with existing experiment scripts. Camera detection is now consistent across all camera types with unified preview/display handling.
