@@ -68,7 +68,7 @@ class PiCamera(CameraTemplate):
             self.picam2 = Picamera2(self.camera_num)
             self.logger.info("PiCamera initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to initialize PiCamera: {e}")
+            self.logger.error(f"PiCamera._initialize_camera failed: {type(e).__name__}: {e}")
             raise
     
     def start(self) -> bool:
@@ -98,7 +98,7 @@ class PiCamera(CameraTemplate):
             return True
             
         except Exception as e:
-            self.logger.error(f"Error starting PiCamera: {e}")
+            self.logger.error(f"PiCamera.start failed: {type(e).__name__}: {e}")
             return False
     
     def _create_configuration(self) -> Dict[str, Any]:
@@ -235,7 +235,7 @@ class PiCamera(CameraTemplate):
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Error capturing frame: {e}")
+            self.logger.error(f"PiCamera.get_frame failed: {type(e).__name__}: {e}")
             return None
 
     def get_detection_frame(self) -> Optional[np.ndarray]:
@@ -278,7 +278,7 @@ class PiCamera(CameraTemplate):
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Error capturing detection frame: {e}")
+            self.logger.error(f"PiCamera.get_detection_frame failed: {type(e).__name__}: {e}")
             return None
     
     def get_resolution(self) -> Tuple[int, int]:
@@ -325,7 +325,7 @@ class PiCamera(CameraTemplate):
                 self.is_running = False
                 self.logger.info("PiCamera stopped")
         except Exception as e:
-            self.logger.error(f"Error stopping PiCamera: {e}")
+            self.logger.error(f"PiCamera.stop failed: {type(e).__name__}: {e}")
     
     def shutdown(self) -> None:
         """Shutdown the camera completely."""
@@ -336,7 +336,7 @@ class PiCamera(CameraTemplate):
                 self.picam2 = None
                 self.logger.info("PiCamera shutdown")
         except Exception as e:
-            self.logger.error(f"Error shutting down PiCamera: {e}")
+            self.logger.error(f"PiCamera.shutdown failed: {type(e).__name__}: {e}")
     
     def cleanup(self) -> None:
         """Cleanup camera resources."""
@@ -374,7 +374,7 @@ class PiCamera(CameraTemplate):
             self.logger.info(f"Image captured to {filename}")
             return True
         except Exception as e:
-            self.logger.error(f"Error capturing image: {e}")
+            self.logger.error(f"PiCamera.capture_image failed: {type(e).__name__}: {e}")
             return False
     
     def get_available_resolutions(self) -> list[Tuple[int, int]]:

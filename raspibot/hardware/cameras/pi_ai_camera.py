@@ -7,7 +7,7 @@ It uses the OpenCV library to draw the detections on the screen.
 Based on the Sony IMX500 camera example code .
 """
 
-from socket import AI_ADDRCONFIG
+import os
 import time
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any
@@ -149,7 +149,7 @@ class PiAICamera(CameraTemplate):
             self.logger.info("Pi AI Camera hardware initialized successfully")
             
         except Exception as e:
-            self.logger.error(f"Failed to initialize Pi AI Camera hardware: {e}")
+            self.logger.error(f"PiAICamera._initialize_hardware failed: {type(e).__name__}: {e}")
             raise
     
     def start(self) -> bool:
@@ -189,7 +189,7 @@ class PiAICamera(CameraTemplate):
             return True
             
         except Exception as e:
-            self.logger.error(f"Error starting Pi AI Camera: {e}")
+            self.logger.error(f"PiAICamera.start failed: {type(e).__name__}: {e}")
             return False
 
     def stop(self):
@@ -214,7 +214,7 @@ class PiAICamera(CameraTemplate):
             self.logger.info("Pi AI Camera stopped")
             
         except Exception as e:
-            self.logger.error(f"Error stopping Pi AI Camera: {e}")
+            self.logger.error(f"PiAICamera.shutdown failed: {type(e).__name__}: {e}")
     
     @lru_cache
     def get_labels(self) -> List[str]:
@@ -520,277 +520,6 @@ class PiAICamera(CameraTemplate):
         
         return updated_tracks
     
-    # DEPRECATED: Replaced by apply_nms() 
-    # This method used intersection over smaller area instead of standard IoU
-    def deduplicate_detections(self, detections: List[Dict[str, Any]], 
-                          overlap_threshold: float = DETECTION_OVERLAP_THRESHOLD) -> List[Dict[str, Any]]:
-        """Deduplicate object detections by removing contained boxes and high-overlap boxes.
-        
-        Args:
-            detections: List of detection dicts with 'box' key containing [x, y, w, h]
-            overlap_threshold: Overlap percentage threshold (0.0-1.0) for considering duplicates
-            
-        Returns:
-            Filtered list of detections with duplicates removed
-        """
-        if not detections:
-            return []
-        
-        # Group detections by label
-        label_groups = {}
-        for detection in detections:
-            label = detection['label']
-            if label not in label_groups:
-                label_groups[label] = []
-            label_groups[label].append(detection)
-        
-        # Process each label group separately
-        result = []
-        for label, group_detections in label_groups.items():
-            if len(group_detections) == 1:
-                result.append(group_detections[0])
-                continue
-                
-            # Sort by area (smallest first) to prioritize smaller detections
-            sorted_group = sorted(group_detections, key=lambda d: d['box'][2] * d['box'][3])
-            kept_in_group = []
-            
-            for current in sorted_group:
-                should_keep = True
-                current_box = current['box']
-                
-                for kept in kept_in_group:
-                    kept_box = kept['box']
-                    
-                    # Check containment
-                    if self._is_contained(current_box, kept_box) or self._is_contained(kept_box, current_box):
-                        should_keep = False
-                        break
-                    
-                    # Check overlap
-                    if self._overlap_percentage(current_box, kept_box) >= overlap_threshold:
-                        should_keep = False
-                        break
-                
-                if should_keep:
-                    kept_in_group.append(current)
-            
-            result.extend(kept_in_group)
-        
-        return result
-
-
-    # DEPRECATED: Not needed with proper NMS
-    def _is_contained(self, box1: List[int], box2: List[int]) -> bool:
-        """Check if box1 is completely contained within box2."""
-        x1, y1, w1, h1 = box1
-        x2, y2, w2, h2 = box2
-        return (x1 >= x2 and y1 >= y2 and 
-                x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2)
-
-
-    # DEPRECATED: Replaced by calculate_iou()
-    def _overlap_percentage(self, box1: List[int], box2: List[int]) -> float:
-        """Calculate overlap percentage between two bounding boxes."""
-        x1, y1, w1, h1 = box1
-        x2, y2, w2, h2 = box2
-        
-        # Calculate intersection
-        left = max(x1, x2)
-        top = max(y1, y2)
-        right = min(x1 + w1, x2 + w2)
-        bottom = min(y1 + h1, y2 + h2)
-        
-        if left >= right or top >= bottom:
-            return 0.0
-        
-        intersection_area = (right - left) * (bottom - top)
-        smaller_area = min(w1 * h1, w2 * h2)
-        
-        return intersection_area / smaller_area if smaller_area > 0 else 0.0
-
-    # DEPRECATED: Boundary handling moved to filter_valid_boxes()
-    def _clamp_box_to_frame1(self, box: List[int]) -> List[int]:
-        """Clamp box coordinates to ensure they don't exceed frame boundaries.
-        
-        Args:
-            box: [x, y, width, height] bounding box
-            
-        Returns:
-            Clamped box coordinates that fit within display frame
-        """
-        x, y, w, h = box
-        display_width, display_height = self.display_resolution  # 1280x720
-        
-        # Clamp x and y to frame boundaries
-        x = max(0, min(x, display_width - 1))
-        y = max(0, min(y, display_height - 1))
-        
-        # Clamp width and height to ensure box doesn't extend beyond frame
-        w = min(w, display_width - x)
-        h = min(h, display_height - y)
-        
-        return [x, y, w, h]
-
-    # DEPRECATED: Not needed with proper NMS
-    def _is_contained1(self, box1: List[int], box2: List[int]) -> bool:
-        """Check if box1 is completely contained within box2 with boundary clamping."""
-        # Clamp both boxes to frame boundaries first
-        x1, y1, w1, h1 = self._clamp_box_to_frame1(box1)
-        x2, y2, w2, h2 = self._clamp_box_to_frame1(box2)
-        
-        # Now check containment with properly clamped boxes
-        return (x1 >= x2 and y1 >= y2 and 
-                x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2)
-
-    # DEPRECATED: Replaced by calculate_iou()
-    def _overlap_percentage1(self, box1: List[int], box2: List[int]) -> float:
-        """Calculate overlap percentage using IoU (Intersection over Union) with boundary clamping."""
-        # Clamp both boxes to frame boundaries first
-        x1, y1, w1, h1 = self._clamp_box_to_frame1(box1)
-        x2, y2, w2, h2 = self._clamp_box_to_frame1(box2)
-        
-        # Calculate intersection with clamped boxes
-        left = max(x1, x2)
-        top = max(y1, y2)
-        right = min(x1 + w1, x2 + w2)
-        bottom = min(y1 + h1, y2 + h2)
-        
-        if left >= right or top >= bottom:
-            return 0.0
-        
-        intersection_area = (right - left) * (bottom - top)
-        area1 = w1 * h1
-        area2 = w2 * h2
-        union_area = area1 + area2 - intersection_area
-        
-        return intersection_area / union_area if union_area > 0 else 0.0
-
-    # DEPRECATED: Replaced by apply_nms()
-    # This was an improved version but still mixed boundary clamping with NMS
-    def deduplicate_detections1(self, detections: List[Dict[str, Any]], 
-                              overlap_threshold: float = 0.66) -> List[Dict[str, Any]]:
-        """Deduplicate object detections using boundary clamping and IoU overlap calculation.
-        
-        Args:
-            detections: List of detection dicts with 'box' key containing [x, y, w, h]
-            overlap_threshold: IoU threshold (0.0-1.0) for considering duplicates
-            
-        Returns:
-            Filtered list of detections with duplicates removed
-        """
-        if not detections:
-            return []
-        
-        # Group detections by label
-        label_groups = {}
-        for detection in detections:
-            label = detection['label']
-            if label not in label_groups:
-                label_groups[label] = []
-            label_groups[label].append(detection)
-        
-        # Process each label group separately
-        result = []
-        for label, group_detections in label_groups.items():
-            if len(group_detections) == 1:
-                result.append(group_detections[0])
-                continue
-                
-            # Sort by area (smallest first) to prioritize smaller detections
-            sorted_group = sorted(group_detections, key=lambda d: d['box'][2] * d['box'][3])
-            kept_in_group = []
-            
-            for current in sorted_group:
-                should_keep = True
-                current_box = current['box']
-                
-                for kept in kept_in_group:
-                    kept_box = kept['box']
-                    
-                    # Check containment with boundary clamping
-                    if self._is_contained1(current_box, kept_box) or self._is_contained1(kept_box, current_box):
-                        should_keep = False
-                        break
-                    
-                    # Check overlap using IoU
-                    if self._overlap_percentage1(current_box, kept_box) >= overlap_threshold:
-                        should_keep = False
-                        break
-                
-                if should_keep:
-                    kept_in_group.append(current)
-            
-            result.extend(kept_in_group)
-        
-        return result
-
-    # DEPRECATED: Replaced by apply_nms() and associate_detections_to_tracks()
-    # This method mixed frame-level deduplication with cross-frame tracking
-    # The new approach separates these concerns for better maintainability
-    def track_detections(self,detections:List[Dict[str, Any]], tracked_objects:List[Dict[str, Any]], max_frames_missing:int=25, max_history:int=10)->List[Dict[str, Any]]:
-        """
-        Track detections across frames and assign IDs to similar objects.
-        
-        Args:
-            detections: List of Detection objects from current frame
-            tracked_objects: List of tracked objects from previous frames
-            max_frames_missing: How many frames an object can be missing before being removed
-            max_history: Maximum number of detections to store per tracked object
-        
-        Returns:
-            Updated list of tracked objects
-        """
-        # Mark all tracked objects as not seen in this frame
-        for tracked_object in tracked_objects:
-            tracked_object['seen_this_frame'] = False
-
-        detections = self.deduplicate_detections1(detections)
-        
-        # Try to match current detections to existing tracked objects
-        for detection in detections:
-            if detection is None:
-                continue
-                
-            matched = False
-            for tracked_object in tracked_objects:
-                # Safety check for empty detection list
-                if tracked_object.get('last_detection',False):
-                    
-                    if self.is_similar(detection, tracked_object['last_detection']):
-                        # Convert detection to dict and add to history
-                        tracked_object['last_detection'] = detection
-                        
-                        tracked_object['seen_this_frame'] = True
-                        tracked_object['seen_count'] = tracked_object.get('seen_count',0)+1
-                        matched = True
-                        continue
-            
-            # If no match found, create new tracked object
-            if not matched:
-                new_object = {
-                    'id': len(tracked_objects),
-                    'last_detection': detection,
-                    'label': detection['label'],
-                    'seen_this_frame': True,
-                    'seen_count':1,
-                    'frames_missing': 0
-                }
-                tracked_objects.append(new_object)
-        
-        # Update missing frames count and remove old objects
-        tracked_objects = [
-            tracked_object for tracked_object in tracked_objects 
-            if tracked_object['seen_this_frame'] or tracked_object['frames_missing'] < max_frames_missing
-        ]
-        
-        # Increment missing frames for objects not seen
-        for tracked_object in tracked_objects:
-            if not tracked_object['seen_this_frame']:
-                tracked_object['frames_missing'] += 1
-        
-        return tracked_objects
-    # END DEPRECATED track_detections method
 
     def detect(self):
         """Main detection which will run as long as self.is_detecting is True.

@@ -322,7 +322,7 @@ class USBCamera(CameraTemplate):
             return True
             
         except Exception as e:
-            self.logger.error(f"Error starting USB camera: {e}")
+            self.logger.error(f"USBCamera.start failed: {type(e).__name__}: {e}")
             return False
     
     def get_frame(self) -> Optional[np.ndarray]:
@@ -340,7 +340,7 @@ class USBCamera(CameraTemplate):
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Error capturing frame: {e}")
+            self.logger.error(f"USBCamera.get_frame failed: {type(e).__name__}: {e}")
             return None
     
     def get_frame_grayscale(self) -> Optional[np.ndarray]:
@@ -367,7 +367,7 @@ class USBCamera(CameraTemplate):
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Error capturing grayscale frame: {e}")
+            self.logger.error(f"USBCamera.get_frame_grayscale failed: {type(e).__name__}: {e}")
             return None
     
     def set_resolution(self, width: int, height: int) -> None:
@@ -404,7 +404,7 @@ class USBCamera(CameraTemplate):
             self.logger.info("USB camera stopped")
             
         except Exception as e:
-            self.logger.error(f"Error stopping USB camera: {e}")
+            self.logger.error(f"USBCamera.shutdown failed: {type(e).__name__}: {e}")
     
     
     
@@ -441,4 +441,4 @@ class USBCamera(CameraTemplate):
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
-        self.stop() 
+        self.shutdown() 
