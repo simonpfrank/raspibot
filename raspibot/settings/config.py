@@ -43,19 +43,19 @@ SERVO_DEFAULT_ANGLE: Final[int] = 90
 SERVO_PAN_CHANNEL: Final[int] = 0
 SERVO_TILT_CHANNEL: Final[int] = 1
 SERVO_CHANNELS: Final[list[int]] = [0, 1]  # Channels used for servos
-"""
+
 # Pan servo pulse width calibration (ms)
-SERVO_PAN_0_PULSE: Final[float] = 0.4    # 0°
+SERVO_PAN_0_PULSE: Final[float] = 0.4  # 0°
 SERVO_PAN_90_PULSE: Final[float] = 1.47  # 90°
-SERVO_PAN_180_PULSE: Final[float] = 2.52 # 180°
-SERVO_PAN_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
+SERVO_PAN_180_PULSE: Final[float] = 2.52  # 180°
+# SERVO_PAN_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
 
 # Tilt servo pulse width calibration (ms)
-SERVO_TILT_0_PULSE: Final[float] = 0.4    # 0°
-SERVO_TILT_90_PULSE: Final[float] = 1.4   # 90° (corrected)
-SERVO_TILT_180_PULSE: Final[float] = 2.47 # 180°
-SERVO_TILT_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
-
+SERVO_TILT_0_PULSE: Final[float] = 0.4  # 0°
+SERVO_TILT_90_PULSE: Final[float] = 1.4  # 90° (corrected)
+SERVO_TILT_180_PULSE: Final[float] = 2.47  # 180°
+# SERVO_TILT_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
+"""
 # Calibrated Pulse Width Values (in milliseconds)
 SERVO_MIN_PULSE: Final[float] = 0.4   # 0 degrees
 SERVO_CENTER_PULSE: Final[float] = 1.45  # 90 degrees (tilt servo)
