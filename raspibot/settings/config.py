@@ -3,22 +3,28 @@
 This module defines hardware-specific constants including pin mappings,
 device addresses, and operational limits for the Raspibot hardware.
 """
+
 import os
-from typing import Final, Dict,Tuple
+from typing import Final, Dict, Tuple
 import cv2
 
 # Application settings loaded from environment
-DEBUG: Final[bool] = os.getenv('RASPIBOT_DEBUG', 'false').lower() == 'true'
-LOG_LEVEL: Final[str] = os.getenv('RASPIBOT_LOG_LEVEL', 'INFO')
-LOG_TO_FILE: Final[bool] = os.getenv('RASPIBOT_LOG_TO_FILE', 'true').lower() == 'true'
-LOG_STACKTRACE: Final[bool] = os.getenv('RASPIBOT_LOG_STACKTRACE', 'false').lower() == 'true'
-LOG_FILE_PATH: Final[str] = os.getenv('RASPIBOT_LOG_FILE_PATH', 'data/logs/raspibot.log') 
+DEBUG: Final[bool] = os.getenv("RASPIBOT_DEBUG", "false").lower() == "true"
+LOG_LEVEL: Final[str] = os.getenv("RASPIBOT_LOG_LEVEL", "INFO")
+LOG_TO_FILE: Final[bool] = os.getenv("RASPIBOT_LOG_TO_FILE", "true").lower() == "true"
+LOG_STACKTRACE: Final[bool] = (
+    os.getenv("RASPIBOT_LOG_STACKTRACE", "false").lower() == "true"
+)
+LOG_FILE_PATH: Final[str] = os.getenv(
+    "RASPIBOT_LOG_FILE_PATH", "data/logs/raspibot.log"
+)
 
-PI_DISPLAY_MODE = "connect" # screen, connect, ssh, none
+PI_DISPLAY_MODE = "connect"  # screen, connect, ssh, none
+PI_CAMERA_DEVICE_ID = None
 # Video display
 DEFAULT_SCREEN_FONT = cv2.FONT_HERSHEY_DUPLEX
 DEFAULT_SCREEN_FONT_SIZE = 1
-DEFAULT_SCREEN_FONT_COLOUR = (255,255,255)
+DEFAULT_SCREEN_FONT_COLOUR = (255, 255, 255)
 DEFAULT_SCREEN_FONT_THIKCNESS = 1
 
 
@@ -30,12 +36,14 @@ PCA9685_ADDRESS: Final[int] = 0x40  # Default PCA9685 I2C address
 # Pan servo: 0.4ms=0°, 1.47ms=90°, 2.52ms=180°, 2.7ms≈200°
 # Tilt servo: 0.4ms=0°, 1.45ms=90°, 2.47ms=180°, 2.7ms≈200°
 SERVO_MIN_ANGLE: Final[int] = 0
-SERVO_MAX_ANGLE: Final[int] = 180  # Updated to match logical range; 2.7ms ≈ 200° is physical max
+SERVO_MAX_ANGLE: Final[int] = (
+    180  # Updated to match logical range; 2.7ms ≈ 200° is physical max
+)
 SERVO_DEFAULT_ANGLE: Final[int] = 90
 SERVO_PAN_CHANNEL: Final[int] = 0
 SERVO_TILT_CHANNEL: Final[int] = 1
 SERVO_CHANNELS: Final[list[int]] = [0, 1]  # Channels used for servos
-'''
+"""
 # Pan servo pulse width calibration (ms)
 SERVO_PAN_0_PULSE: Final[float] = 0.4    # 0°
 SERVO_PAN_90_PULSE: Final[float] = 1.47  # 90°
@@ -63,22 +71,34 @@ SERVO_TILT_MIN_ANGLE: Final[int] = 0   # 0° = pointing down (0.4ms)
 SERVO_TILT_MAX_ANGLE: Final[int] = 200  # 200° = pointing up (2.7ms)
 SERVO_TILT_CENTER: Final[int] = 90     # 90° = center (1.45ms)
 SERVO_TILT_UP_ANGLE: Final[int] = 200   # Pointing up (2.7ms)
-SERVO_TILT_DOWN_ANGLE: Final[int] = 0   # Pointing down (0.4ms)'''
+SERVO_TILT_DOWN_ANGLE: Final[int] = 0   # Pointing down (0.4ms)"""
 
 # PCA9685 Anti-Jitter Settings
-PCA9685_DEADBAND: Final[float] = 0.5  # Reduced from 2.0 - minimum angle change to trigger movement (degrees)
-PCA9685_STABILIZATION_DELAY: Final[float] = 0.02  # Reduced from 0.1 - delay after movement to stabilize (seconds)
-PCA9685_MIN_STEP_SIZE: Final[float] = 0.5  # Reduced from 2.0 - minimum step size for smoother movement (degrees)
-PCA9685_MAX_STEP_SIZE: Final[float] = 2.0  # Reduced from 5.0 - maximum step size for faster movement (degrees)
-PCA9685_STEP_DELAY: Final[float] = 0.01  # Reduced from 0.02 - delay between steps for smoother movement (seconds)
-PCA9685_PWM_PRECISION: Final[int] = 3  # Increased from 2 - PWM precision to minimize jitter
+PCA9685_DEADBAND: Final[float] = (
+    0.5  # Reduced from 2.0 - minimum angle change to trigger movement (degrees)
+)
+PCA9685_STABILIZATION_DELAY: Final[float] = (
+    0.02  # Reduced from 0.1 - delay after movement to stabilize (seconds)
+)
+PCA9685_MIN_STEP_SIZE: Final[float] = (
+    0.5  # Reduced from 2.0 - minimum step size for smoother movement (degrees)
+)
+PCA9685_MAX_STEP_SIZE: Final[float] = (
+    2.0  # Reduced from 5.0 - maximum step size for faster movement (degrees)
+)
+PCA9685_STEP_DELAY: Final[float] = (
+    0.01  # Reduced from 0.02 - delay between steps for smoother movement (seconds)
+)
+PCA9685_PWM_PRECISION: Final[int] = (
+    3  # Increased from 2 - PWM precision to minimize jitter
+)
 
 # Camera Configuration
-CAMERA_DEFAULT_WIDTH: Final[int] = 1280
-CAMERA_DEFAULT_HEIGHT: Final[int] = 720
+CAMERA_RESOLUTION: Final[Tuple[int, int]] = (1280, 720)
 CAMERA_DEVICE_ID: Final[int] = 0
+USB_CAMERA_DEVICE_ID: Final[int] = 1
 
-'''# Face Tracking Configuration  
+"""# Face Tracking Configuration  
 FACE_MOVEMENT_THRESHOLD: Final[int] = 50   # pixels - minimum movement to trigger servo
 FACE_MOVEMENT_SCALE: Final[float] = 0.3    # how much to move servo per pixel offset
 FACE_STABILITY_THRESHOLD: Final[int] = 100 # pixels - max movement to be considered stable
@@ -117,16 +137,18 @@ GPIO_SERVO_DUTY_CYCLE_PRECISION: Final[int] = 1  # Reduced precision to minimize
 GPIO_SERVO_PINS: Final[Dict[int, int]] = {
     0: 17,  # Pan servo on GPIO 17
     1: 18,  # Tilt servo on GPIO 18
-}'''
+}"""
 
 # Pi AI Camera Configuration
-AI_DEFAULT_VISION_MODEL: Final[str] = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
+AI_DEFAULT_VISION_MODEL: Final[str] = (
+    "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
+)
 AI_CAMERA_RESOLUTION: Final[Tuple[int, int]] = (1280, 720)
 CAMERA_DISPLAY_RESOLUTION: Final[Tuple[int, int]] = (1280, 720)
 CAMERA_DISPLAY_POSITION: Final[Tuple[int, int]] = (5, 10)
 AI_DETECTION_THRESHOLD: Final[float] = 0.48
 AI_IOU_THRESHOLD: Final[float] = 0.8
-DETECTION_OVERLAP_THRESHOLD = .6
+DETECTION_OVERLAP_THRESHOLD = 0.6
 AI_MAX_DETECTIONS: Final[int] = 20
 AI_CAMERA_DEVICE_ID: Final[int] = 0
 AI_INFERERENCE_FRAME_RATE: Final[int] = 30
@@ -136,13 +158,12 @@ NMS_IOU_THRESHOLD: Final[float] = 0.5  # IoU threshold for NMS deduplication
 NMS_MAX_AREA_RATIO: Final[float] = 0.8  # Maximum box area as ratio of frame
 NMS_MIN_AREA: Final[int] = 100  # Minimum box area in pixels
 
-TRACKING_IOU_THRESHOLD: Final[float] = 0.3  # IoU threshold for track association  
+TRACKING_IOU_THRESHOLD: Final[float] = 0.3  # IoU threshold for track association
 TRACKING_MAX_FRAMES_MISSING: Final[int] = 25  # Max frames before removing track
 DETECTION_OVERLAP_THRESHOLD: Final[float] = 0.5  # For backward compatibility
 
 
-
-'''PI_AI_CAMERA_CONFIG: Final[Dict] = {
+"""PI_AI_CAMERA_CONFIG: Final[Dict] = {
     "default_model": "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk",
     "tensor_input_size": (320, 320),  # IMX500 fixed tensor size
     
@@ -262,9 +283,9 @@ DETECTION_OVERLAP_THRESHOLD: Final[float] = 0.5  # For backward compatibility
         "fps_improvement": 1.15,  # 15% better FPS than color
         "memory_efficiency": 2.0   # 2x better memory efficiency
     }
-}'''
+}"""
 
-'''# Search Pattern Configuration
+"""# Search Pattern Configuration
 SEARCH_PATTERN_CONFIG: Final[Dict] = {
     "spiral_search": {
         "default_radius": 0.3,
@@ -282,4 +303,4 @@ SEARCH_PATTERN_CONFIG: Final[Dict] = {
         "search_radius": 0.2,
         "max_search_time": 10.0
     }
-}'''
+}"""

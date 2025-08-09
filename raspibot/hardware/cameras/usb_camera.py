@@ -7,168 +7,210 @@ from typing import Optional, Tuple
 import numpy as np
 
 try:
-    from picamera2 import Picamera2
+    from picamera2 import Picamera2, Preview
+
     PICAMERA2_AVAILABLE = True
 except ImportError:
     PICAMERA2_AVAILABLE = False
 
 from raspibot.utils.logging_config import setup_logging
+from raspibot.settings.config import *
+
+display_modes = {
+    "screen": Preview.QTGL,  # hardware accelerated
+    "connect": Preview.QT,  # slow
+    "ssh": Preview.DRM,  # no desktop running
+    "none": Preview.NULL,
+}
 
 
 class USBCamera:
-    """Simplified USB Camera using Picamera2 for unified interface."""
-    
-    def __init__(self, camera_num: Optional[int] = None, width: int = 1280, height: int = 720):
+    """USB Camera implementation using Picamera2."""
+
+    def __init__(
+        self,
+        camera_device_id: Optional[int] = None,
+        camera_resolution: Optional[Tuple[int, int]] = None,
+        display_resolution: Optional[Tuple[int, int]] = None,
+        display_position: Optional[Tuple[int, int]] = None,
+        display_mode: Optional[str] = None,
+    ) -> None:
         """
-        Initialize USB camera using Picamera2.
-        
+        Initialize USB Camera.
+
         Args:
-            camera_num: Specific camera number (if None, find first USB camera)
-            width: Target width
-            height: Target height
+            camera_device_id: Camera device ID
+            camera_resolution: Camera resolution
+            display_resolution: Display resolution
+            display_position: Display position
+            display_mode: Display mode ("screen", "connect", "ssh", "none")
         """
         if not PICAMERA2_AVAILABLE:
-            raise ImportError("picamera2 not available")
-        
+            raise ImportError(
+                "picamera2 not available. USB camera requires picamera2 library."
+            )
+
         self.logger = setup_logging(__name__)
-        self.camera_num = camera_num
-        self.target_width = width
-        self.target_height = height
-        
+
+        # Use config defaults if not provided
+        self.camera_resolution = camera_resolution or CAMERA_RESOLUTION
+        self.display_resolution = display_resolution or CAMERA_DISPLAY_RESOLUTION
+        self.display_position = display_position or CAMERA_DISPLAY_POSITION
+        self.camera_device_id = camera_device_id or USB_CAMERA_DEVICE_ID
+        self.display_mode = display_mode or PI_DISPLAY_MODE
+
         self.camera: Optional[Picamera2] = None
         self.is_running = False
+        self.is_detecting = False
+        if self.display_mode == "connect":
+            # This may need adjusting for different displays other than direct
+            os.environ["DISPLAY"] = ":0"  # for headles displays
+            os.environ["QT_QPA_PLATFORM"] = "wayland"
+
+        self.logger.info(f"Camera resolution: {self.camera_resolution}")
+        self.logger.info(f"Display: {self.display_resolution}")
         self.current_fps = 0.0
-        
-        # FPS tracking
-        self.fps_counter = 0
-        self.fps_start_time = time.time()
-        
+
+        self.logger.info(f"Camera resolution: {self.camera_resolution}")
+        self.logger.info(f"Display: {self.display_resolution}")
+
         self.logger.info("Initializing USB Camera with Picamera2")
-        self._find_usb_camera()
-    
-    def _find_usb_camera(self) -> None:
-        """Find USB camera using Picamera2.global_camera_info()."""
-        camera_info = Picamera2.global_camera_info()
-        
-        usb_cameras = []
-        for i, info in enumerate(camera_info):
-            # USB cameras typically have UVC in model name or USB in ID
-            model = info.get('Model', '').lower()
-            camera_id = info.get('Id', '').lower()
-            
-            # Check for USB camera indicators
-            if ('uvc' in model or 'usb' in camera_id or 
-                any(vid in camera_id for vid in ['046d', '0bda', '1bcf', '0ac8'])):
-                usb_cameras.append((i, info))
-        
-        if not usb_cameras:
-            raise RuntimeError("No USB cameras found via Picamera2")
-        
-        # Use specified camera number or first USB camera found
-        if self.camera_num is not None:
-            # Verify specified camera exists and is USB
-            for num, info in usb_cameras:
-                if num == self.camera_num:
-                    self.camera_num = num
-                    self.logger.info(f"Using specified USB camera {num}: {info.get('Model', 'Unknown')}")
-                    return
-            raise RuntimeError(f"Camera {self.camera_num} is not a USB camera")
-        else:
-            # Use first USB camera found
-            self.camera_num, camera_info = usb_cameras[0]
-            self.logger.info(f"Auto-selected USB camera {self.camera_num}: {camera_info.get('Model', 'Unknown')}")
-    
-    def start(self) -> bool:
-        """Start the USB camera."""
+        self._initialize_hardware()
+
+    def _initialize_hardware(self) -> None:
+        """Initialize USB camera hardware using Picamera2.global_camera_info()."""
         try:
-            self.logger.info(f"Starting USB camera {self.camera_num} with Picamera2")
+            camera_info = Picamera2.global_camera_info()
             
-            self.camera = Picamera2(self.camera_num)
+            target_camera = None
+            first_usb_camera = None
             
-            # Configure for RGB output (convert to BGR later for OpenCV compatibility)
-            config = self.camera.create_preview_configuration(
-                main={"size": (self.target_width, self.target_height), "format": "RGB888"},
-                buffer_count=4
+            # Single pass to find what we need
+            for info in camera_info:
+                model = info.get("Model", "").lower()
+                camera_id = info.get("Id", "").lower()
+                
+                # Check if this is a USB camera
+                if "uvc" in model or "usb" in camera_id:
+                    # Keep track of first USB camera found
+                    if first_usb_camera is None:
+                        first_usb_camera = info
+                    
+                    # If we have a specific camera ID, check if this is it
+                    if self.camera_device_id is not None and info.get("Num") == self.camera_device_id:
+                        target_camera = info
+                        break
+            
+            # Select camera based on what we found
+            if self.camera_device_id is not None:
+                if target_camera is None:
+                    raise RuntimeError(f"Camera {self.camera_device_id} is not a USB camera")
+                self.logger.info(f"Using specified USB camera {self.camera_device_id}: {target_camera.get('Model', 'Unknown')}")
+            else:
+                if first_usb_camera is None:
+                    raise RuntimeError("No USB cameras found via Picamera2")
+                target_camera = first_usb_camera
+                self.camera_device_id = target_camera.get("Num")
+                self.logger.info(f"Auto-selected USB camera {self.camera_device_id}: {target_camera.get('Model', 'Unknown')}")
+
+            self.camera = Picamera2(self.camera_device_id)
+            self.logger.info("USB Camera hardware initialized successfully")
+
+        except Exception as e:
+            self.logger.error(f"USBCamera._initialize_hardware failed: {type(e).__name__}: {e}")
+            raise
+
+    def start(self) -> bool:
+        """Start camera capture."""
+        try:
+            self.logger.info(f"Starting Preview")
+            self.camera.start_preview(
+                display_modes[self.display_mode],
+                x=self.display_position[0],
+                y=self.display_position[1],
+                width=self.display_resolution[0],
+                height=self.display_resolution[1],
             )
-            self.camera.configure(config)
-            self.camera.start()
-            
+
+            self.logger.info(f"Starting Camera")
+            self.config = self.camera.create_preview_configuration(
+                main={"size": self.camera_resolution},
+            )
+            self.camera.start(self.config)
+
             self.is_running = True
-            self.fps_start_time = time.time()
-            self.fps_counter = 0
-            
-            self.logger.info(f"USB camera started at {self.target_width}x{self.target_height}")
+            self.logger.info("USB Camera started successfully")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"USBCamera.start failed: {type(e).__name__}: {e}")
             return False
-    
-    def get_frame(self) -> Optional[np.ndarray]:
-        """Get a frame from the camera."""
-        if not self.is_running or self.camera is None:
-            return None
-        
-        try:
-            # Capture RGB frame and convert to BGR for OpenCV compatibility
-            frame = self.camera.capture_array("main")
-            if frame is not None:
-                import cv2
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                self._update_fps()
-                return frame_bgr
-            else:
-                self.logger.warning("Failed to capture frame")
-                return None
-                
-        except Exception as e:
-            self.logger.error(f"USBCamera.get_frame failed: {type(e).__name__}: {e}")
-            return None
-    
-    def get_resolution(self) -> Tuple[int, int]:
-        """Get current camera resolution."""
-        return (self.target_width, self.target_height)
-    
-    def get_fps(self) -> float:
-        """Get current FPS."""
-        return self.current_fps
-    
-    def is_available(self) -> bool:
-        """Check if camera is available."""
-        return self.is_running and self.camera is not None
-    
+
+    def stop(self):
+        if self.camera is not None and self.is_running:
+            self.is_detecting = False
+            self.camera.stop()
+
     def shutdown(self) -> None:
         """Stop camera capture and release resources."""
         try:
             if self.camera is not None:
-                if self.is_running:
-                    self.camera.stop()
+                self.is_detecting = False
+                self.camera.stop()
                 self.camera.close()
+
+                self.is_running = False
                 self.camera = None
-            
-            self.is_running = False
-            self.logger.info("USB camera stopped")
-            
+
+            self.logger.info("USB Camera stopped")
+
         except Exception as e:
             self.logger.error(f"USBCamera.shutdown failed: {type(e).__name__}: {e}")
-    
-    def _update_fps(self) -> None:
-        """Update FPS counter."""
-        self.fps_counter += 1
-        current_time = time.time()
-        elapsed = current_time - self.fps_start_time
+
+    def detect(self, callback=None):
+        """Main detection which will run as long as self.is_detecting is True.
         
-        if elapsed >= 1.0:  # Update FPS every second
-            self.current_fps = self.fps_counter / elapsed
-            self.fps_counter = 0
-            self.fps_start_time = current_time
-    
-    def __enter__(self):
-        """Context manager entry."""
-        if not self.start():
-            raise RuntimeError("Failed to start USB camera")
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.shutdown()
+        Args:
+            callback: Optional function to call in the loop for processing (face detection, annotation, etc.)
+        """
+        self.is_detecting = True
+
+        while self.is_detecting:
+            # Call optional callback for processing
+            if callback:
+                callback(self)
+            
+            # For USB camera, we just maintain the display
+            time.sleep(0.1)  # Small delay to prevent busy waiting
+
+            # Stop if preview object no longer exists (e.g when closed)
+            if not self.camera._preview:
+                self.is_detecting = False
+                self.logger.info("Preview closed")
+                break
+        self.stop()
+
+
+if __name__ == "__main__":
+    try:
+        # Initialize USB camera
+        camera = USBCamera()
+
+        # Start the camera
+        if camera.start():
+            print("USB camera started successfully. Close the preview window to stop.")
+
+            # Run the detect loop (maintains display until closed)
+            camera.detect()
+
+        else:
+            print("Failed to start USB camera")
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+    finally:
+        # Cleanup
+        if "camera" in locals():
+            camera.shutdown()
+            print("USB camera stopped")
