@@ -543,7 +543,7 @@ class PiAICamera:
 
         return updated_tracks
 
-    def detect(self):
+    def process(self):
         """Main detection which will run as long as self.is_detecting is True."""
         self.is_detecting = True
         tracked_objects = []

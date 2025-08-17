@@ -5,6 +5,7 @@ import time
 from typing import Optional, Tuple, List, Dict, Any
 from functools import lru_cache
 import cv2
+from threading import Thread
 
 try:
     from picamera2 import Picamera2, Preview, MappedArray
@@ -275,7 +276,7 @@ class Camera:
             self.logger.error(f"Camera.start failed: {type(e).__name__}: {e}")
             return False
 
-    def detect(self, callback=None):
+    def process(self, callback=None):
         """Universal detect loop with optional callback.
 
         Args:
@@ -338,6 +339,10 @@ class Camera:
 
         except Exception as e:
             self.logger.error(f"AI detection processing failed: {e}")
+
+    def clear_tracked_objects(self):
+        """Clear current tracked objects to reset tracking state."""
+        self.tracked_objects = []
 
     def stop(self):
         """Universal stop method."""
@@ -664,7 +669,7 @@ class Camera:
             new_x, new_y, text_width, text_height = self.add_screen_text(
                 m, f"FPS: {self.fps:.2f}", start_x, start_y
             )
-            if self.camera == "pi_ai":
+            if self.camera_type == "pi_ai":
                 start_x, new_y, text_width, text_height = self.add_screen_text(
                     m, f"Detections: {len(self.detections)}", new_x, new_y
                 )
@@ -688,7 +693,7 @@ if __name__ == "__main__":
             else:
                 print("Running in display-only mode...")
 
-            camera.detect()
+            camera.process()
 
         else:
             print("Failed to start camera")

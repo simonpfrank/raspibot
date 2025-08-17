@@ -49,12 +49,20 @@ SERVO_PAN_0_PULSE: Final[float] = 0.4  # 0°
 SERVO_PAN_90_PULSE: Final[float] = 1.47  # 90°
 SERVO_PAN_180_PULSE: Final[float] = 2.52  # 180°
 # SERVO_PAN_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
+SERVO_PAN_MIN_ANGLE: Final[int] = 0
+SERVO_PAN_MAX_ANGLE: Final[int] = 180
+SERVO_PAN_CENTER: Final[int] = 90
+
 
 # Tilt servo pulse width calibration (ms)
 SERVO_TILT_0_PULSE: Final[float] = 0.4  # 0°
 SERVO_TILT_90_PULSE: Final[float] = 1.4  # 90° (corrected)
 SERVO_TILT_180_PULSE: Final[float] = 2.47  # 180°
 # SERVO_TILT_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
+
+SERVO_TILT_MIN_ANGLE: Final[int] = 0
+SERVO_TILT_MAX_ANGLE: Final[int] = 150
+SERVO_TILT_CENTER: Final[int] = 90
 """
 # Calibrated Pulse Width Values (in milliseconds)
 SERVO_MIN_PULSE: Final[float] = 0.4   # 0 degrees
@@ -94,7 +102,7 @@ PCA9685_PWM_PRECISION: Final[int] = (
 )
 
 # Camera Configuration
-CAMERA_RESOLUTION: Final[Tuple[int, int]] = (1280, 720)
+CAMERA_RESOLUTION: Final[Tuple[int, int]] = (1920, 1080)
 CAMERA_DEVICE_ID: Final[int] = 0
 USB_CAMERA_DEVICE_ID: Final[int] = 1
 

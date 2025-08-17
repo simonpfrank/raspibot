@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 
 try:
     from picamera2 import Picamera2, Preview
+
     PICAMERA2_AVAILABLE = True
 except ImportError:
     PICAMERA2_AVAILABLE = False
@@ -73,43 +74,58 @@ class PiCamera:
         """Initialize Pi camera hardware using Picamera2.global_camera_info()."""
         try:
             camera_info = Picamera2.global_camera_info()
-            
+
             target_camera = None
             first_pi_camera = None
-            
+
             # Single pass to find what we need
             for info in camera_info:
                 model = info.get("Model", "").lower()
                 camera_id = info.get("Id", "").lower()
-                
+
                 # Check if this is a Pi camera (regular Pi camera or Pi AI camera, but not USB)
-                if ("imx" in model or "pi" in model.lower()) and "uvc" not in model and "usb" not in camera_id:
+                if (
+                    ("imx" in model or "pi" in model.lower())
+                    and "uvc" not in model
+                    and "usb" not in camera_id
+                ):
                     # Keep track of first Pi camera found
                     if first_pi_camera is None:
                         first_pi_camera = info
-                    
+
                     # If we have a specific camera ID, check if this is it
-                    if self.camera_device_id is not None and info.get("Num") == self.camera_device_id:
+                    if (
+                        self.camera_device_id is not None
+                        and info.get("Num") == self.camera_device_id
+                    ):
                         target_camera = info
                         break
-            
+
             # Select camera based on what we found
             if self.camera_device_id is not None:
                 if target_camera is None:
-                    raise RuntimeError(f"Camera {self.camera_device_id} is not a Pi camera")
-                self.logger.info(f"Using specified Pi camera {self.camera_device_id}: {target_camera.get('Model', 'Unknown')}")
+                    raise RuntimeError(
+                        f"Camera {self.camera_device_id} is not a Pi camera"
+                    )
+                self.logger.info(
+                    f"Using specified Pi camera {self.camera_device_id}: {target_camera.get('Model', 'Unknown')}"
+                )
             else:
                 if first_pi_camera is None:
                     raise RuntimeError("No Pi cameras found via Picamera2")
                 target_camera = first_pi_camera
                 self.camera_device_id = target_camera.get("Num")
-                self.logger.info(f"Auto-selected Pi camera {self.camera_device_id}: {target_camera.get('Model', 'Unknown')}")
+                self.logger.info(
+                    f"Auto-selected Pi camera {self.camera_device_id}: {target_camera.get('Model', 'Unknown')}"
+                )
 
             self.camera = Picamera2(self.camera_device_id)
             self.logger.info("Pi Camera hardware initialized successfully")
 
         except Exception as e:
-            self.logger.error(f"PiCamera._initialize_hardware failed: {type(e).__name__}: {e}")
+            self.logger.error(
+                f"PiCamera._initialize_hardware failed: {type(e).__name__}: {e}"
+            )
             raise
 
     def start(self) -> bool:
@@ -159,9 +175,9 @@ class PiCamera:
         except Exception as e:
             self.logger.error(f"PiCamera.shutdown failed: {type(e).__name__}: {e}")
 
-    def detect(self, callback=None):
+    def process(self, callback=None):
         """Main detection which will run as long as self.is_detecting is True.
-        
+
         Args:
             callback: Optional function to call in the loop for processing (face detection, annotation, etc.)
         """
@@ -171,7 +187,7 @@ class PiCamera:
             # Call optional callback for processing
             if callback:
                 callback(self)
-            
+
             # For Pi camera, we just maintain the display
             time.sleep(0.1)  # Small delay to prevent busy waiting
 

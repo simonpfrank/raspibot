@@ -208,7 +208,6 @@ __marimo__/
 
 
 # Experiments
-experiments/
 .lgd*
 .env*
 .vscode/
