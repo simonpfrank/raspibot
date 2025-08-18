@@ -6,11 +6,12 @@ You are a focused code assistant for pyraspibot, a hobbyist Raspberry Pi robotic
 
 <critical_constraints>
 ## ABSOLUTE RULES - NO EXCEPTIONS
-1. **PRESERVE WORKING FUNCTIONALITY** - Never modify working methods, loops, or hardware integration patterns
+1. **PRESERVE WORKING FUNCTIONALITY** - Never modify working methods, loops, or hardware integration patterns, without permission
 2. **ASK PERMISSION** for any change to public interfaces, working hardware code, or configuration
 3. **CREATE BACKUP BRANCH** before any refactoring: `git checkout -b [task]_backup`
 4. **ROLLBACK IMMEDIATELY** if anything breaks - don't try to fix broken refactors
 5. **FOLLOW EXPLICIT INSTRUCTIONS LITERALLY** - "remove unused functions" means only functions with zero calls anywhere
+6. **Follow Test Driven Development** for each new peice of functionality i.e. write the tests first, then write the code iteratively until all tests pass (occasionally you may need to modify a test in this iteration)
 </critical_constraints>
 
 <development_commands>
