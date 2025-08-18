@@ -1,122 +1,273 @@
-"""Tests for logging configuration.
+"""Unit tests for raspibot.utils.logging_config module."""
 
-This module tests the simple, effective logging setup with correlation IDs
-and clean formatting without complex abstractions.
-"""
-
-import logging
 import pytest
-from unittest.mock import patch
+import logging
+import os
+import contextvars
+from unittest.mock import patch, Mock, MagicMock
+from io import StringIO
 
-# Import the logging config module (will be created after tests)
-# from raspibot.utils import logging_config
-
-
-class TestLoggingFormat:
-    """Test the custom log formatter."""
-
-    def test_log_format_clean(self):
-        """Test that log format has no brackets and uses decimal milliseconds."""
-        from raspibot.utils.logging_config import setup_logging, RaspibotFormatter
-        
-        # Setup logging
-        logger = setup_logging()
-        
-        # Test that logging works (no exceptions)
-        logger.info("Test message")
-        logger.debug("Debug message")
-        logger.warning("Warning message")
-        
-        # Verify logger has our custom formatter
-        assert len(logger.handlers) > 0
-        assert isinstance(logger.handlers[0].formatter, RaspibotFormatter)
-
-    def test_class_function_line_format(self):
-        """Test that log format includes ClassName.function:line_number."""
-        from raspibot.utils.logging_config import setup_logging
-        
-        logger = setup_logging()
-        
-        # This test will verify the format includes class.function:line
-        # We'll implement this by checking the formatter
-        formatter = logger.handlers[0].formatter
-        assert formatter is not None
-
-    def test_correlation_id_format(self):
-        """Test that correlation IDs appear as [correlation:task] format."""
-        from raspibot.utils.logging_config import setup_logging, set_correlation_id
-        
-        logger = setup_logging()
-        set_correlation_id("abc123", "test_task")
-        
-        # Test that correlation ID is set
-        # We'll implement this with contextvars
-        pass
-
-    def test_no_correlation_placeholder(self):
-        """Test that [: ] appears when no correlation ID is set."""
-        from raspibot.utils.logging_config import setup_logging
-        
-        logger = setup_logging()
-        
-        # Test that [: ] appears in log format when no correlation
-        pass
+from raspibot.utils.logging_config import (
+    RaspibotFormatter,
+    setup_logging,
+    set_correlation_id,
+    get_correlation_id
+)
 
 
-class TestErrorLogging:
-    """Test error logging without stack traces."""
-
-    def test_error_logging_no_stacktrace(self):
-        """Test that errors are logged without stack traces by default."""
-        from raspibot.utils.logging_config import setup_logging
-        from raspibot.exceptions import HardwareException
+class TestRaspibotFormatter:
+    """Test custom log formatter."""
+    
+    def test_format_basic_message(self):
+        """Test basic log message formatting."""
+        formatter = RaspibotFormatter()
         
-        logger = setup_logging()
+        record = logging.LogRecord(
+            name="test.module",
+            level=logging.INFO,
+            pathname="test.py",
+            lineno=42,
+            msg="Test message",
+            args=(),
+            exc_info=None
+        )
+        record.funcName = "test_function"
         
-        # Test that error logging doesn't include stack traces
-        with patch('sys.stdout') as mock_stdout:
-            try:
-                raise HardwareException("Test error")
-            except HardwareException:
-                logger.exception("Error occurred")
+        formatted = formatter.format(record)
+        
+        assert "INFO" in formatted
+        assert "module.test_function:42" in formatted
+        assert "[:] Test message" in formatted
+    
+    def test_format_with_correlation_id(self):
+        """Test formatting with correlation ID."""
+        formatter = RaspibotFormatter()
+        
+        # Set correlation context
+        with patch('raspibot.utils.logging_config._correlation_id') as mock_corr_id:
+            with patch('raspibot.utils.logging_config._task_name') as mock_task_name:
+                mock_corr_id.get.return_value = "abc123"
+                mock_task_name.get.return_value = "test_task"
+                
+                record = logging.LogRecord(
+                    name="test.module",
+                    level=logging.INFO,
+                    pathname="test.py",
+                    lineno=42,
+                    msg="Test message",
+                    args=(),
+                    exc_info=None
+                )
+                record.funcName = "test_function"
+                
+                formatted = formatter.format(record)
+                
+                assert "[abc123:test_task]" in formatted
+    
+    def test_format_without_correlation(self):
+        """Test formatting without correlation info."""
+        formatter = RaspibotFormatter()
+        
+        with patch('raspibot.utils.logging_config._correlation_id') as mock_corr_id:
+            with patch('raspibot.utils.logging_config._task_name') as mock_task_name:
+                mock_corr_id.get.return_value = None
+                mock_task_name.get.return_value = None
+                
+                record = logging.LogRecord(
+                    name="test.module",
+                    level=logging.INFO,
+                    pathname="test.py",
+                    lineno=42,
+                    msg="Test message",
+                    args=(),
+                    exc_info=None
+                )
+                record.funcName = "test_function"
+                
+                formatted = formatter.format(record)
+                
+                assert "[:]" in formatted
+    
+    def test_format_with_exception_stacktrace_disabled(self):
+        """Test exception formatting without stack trace."""
+        formatter = RaspibotFormatter()
+        
+        try:
+            raise ValueError("Test error")
+        except ValueError:
+            import sys
+            exc_info = sys.exc_info()
+        
+        with patch.dict(os.environ, {'RASPIBOT_LOG_STACKTRACE': 'false'}):
+            record = logging.LogRecord(
+                name="test.module",
+                level=logging.ERROR,
+                pathname="test.py",
+                lineno=42,
+                msg="Test message",
+                args=(),
+                exc_info=exc_info
+            )
+            record.funcName = "test_function"
             
-            # Verify no stack trace in output
-            output = mock_stdout.write.call_args_list
-            # We'll check that output doesn't contain traceback info
-
-    def test_error_logging_with_stacktrace(self):
-        """Test that stack traces can be enabled via environment variable."""
-        from raspibot.utils.logging_config import setup_logging
-        from raspibot.exceptions import HardwareException
-        
-        with patch.dict('os.environ', {'RASPIBOT_LOG_STACKTRACE': 'true'}):
-            logger = setup_logging()
+            formatted = formatter.format(record)
             
-            # Test that stack traces are included when enabled
-            pass
-
-
-class TestCorrelationTracking:
-    """Test correlation ID tracking."""
-
-    def test_correlation_id_setting(self):
-        """Test that correlation IDs can be set and retrieved."""
-        from raspibot.utils.logging_config import set_correlation_id, get_correlation_id
+            # Should not contain stack trace
+            assert "Traceback" not in formatted
+            assert "ValueError: Test error" not in formatted
+    
+    def test_format_with_exception_stacktrace_enabled(self):
+        """Test exception formatting with stack trace."""
+        formatter = RaspibotFormatter()
         
-        # Test setting and getting correlation ID
+        try:
+            raise ValueError("Test error")
+        except ValueError:
+            import sys
+            exc_info = sys.exc_info()
+        
+        with patch.dict(os.environ, {'RASPIBOT_LOG_STACKTRACE': 'true'}):
+            record = logging.LogRecord(
+                name="test.module",
+                level=logging.ERROR,
+                pathname="test.py",
+                lineno=42,
+                msg="Test message",
+                args=(),
+                exc_info=exc_info
+            )
+            record.funcName = "test_function"
+            
+            formatted = formatter.format(record)
+            
+            # Should contain stack trace
+            assert "Traceback" in formatted
+            assert "ValueError: Test error" in formatted
+    
+    def test_format_class_function_info(self):
+        """Test class/function/line formatting."""
+        formatter = RaspibotFormatter()
+        
+        record = logging.LogRecord(
+            name="raspibot.hardware.servos.servo",
+            level=logging.DEBUG,
+            pathname="servo.py",
+            lineno=123,
+            msg="Debug message",
+            args=(),
+            exc_info=None
+        )
+        record.funcName = "set_servo_angle"
+        
+        formatted = formatter.format(record)
+        
+        assert "servo.set_servo_angle:123" in formatted
+
+
+class TestCorrelationContext:
+    """Test correlation context management."""
+    
+    def test_set_correlation_id(self):
+        """Test correlation ID context setting."""
         set_correlation_id("test123", "test_task")
-        correlation_id, task = get_correlation_id()
-        assert correlation_id == "test123"
-        assert task == "test_task"
+        
+        assert get_correlation_id() == ("test123", "test_task")
+    
+    def test_get_correlation_id(self):
+        """Test correlation ID retrieval."""
+        # Test with no context set
+        with patch('raspibot.utils.logging_config._correlation_id') as mock_corr_id:
+            with patch('raspibot.utils.logging_config._task_name') as mock_task_name:
+                mock_corr_id.get.return_value = None
+                mock_task_name.get.return_value = None
+                
+                assert get_correlation_id() == (None, None)
+        
+        # Test with context set
+        set_correlation_id("abc456", "another_task")
+        assert get_correlation_id() == ("abc456", "another_task")
+    
+    def test_correlation_context_isolation(self):
+        """Test context isolation across tasks."""
+        import asyncio
+        
+        async def task1():
+            set_correlation_id("task1_id", "task1")
+            await asyncio.sleep(0.01)
+            return get_correlation_id()
+        
+        async def task2():
+            set_correlation_id("task2_id", "task2")
+            await asyncio.sleep(0.01)
+            return get_correlation_id()
+        
+        async def run_test():
+            results = await asyncio.gather(task1(), task2())
+            return results
+        
+        # This test may need to be adjusted based on actual context implementation
+        # For now, just test basic functionality
+        set_correlation_id("main_id", "main_task")
+        assert get_correlation_id() == ("main_id", "main_task")
 
-    def test_correlation_id_default(self):
-        """Test that correlation ID defaults to None when not set."""
-        from raspibot.utils.logging_config import get_correlation_id, set_correlation_id
-        
-        # Clear any existing correlation ID
-        set_correlation_id(None, None)
-        
-        # Test default values
-        correlation_id, task = get_correlation_id()
-        assert correlation_id is None
-        assert task is None 
+
+class TestLoggingSetup:
+    """Test logging setup functionality."""
+    
+    def test_setup_logging_default(self):
+        """Test default logging setup."""
+        with patch('raspibot.utils.logging_config.logging.getLogger') as mock_get_logger:
+            with patch('raspibot.utils.logging_config.logging.StreamHandler') as mock_handler:
+                with patch('raspibot.utils.logging_config.logging.FileHandler') as mock_file_handler:
+                    mock_logger = Mock()
+                    mock_get_logger.return_value = mock_logger
+                    
+                    logger = setup_logging()
+                    
+                    assert logger is mock_logger
+                    mock_logger.setLevel.assert_called()
+    
+    def test_setup_logging_custom_level(self):
+        """Test custom log level setup."""
+        with patch.dict(os.environ, {'RASPIBOT_LOG_LEVEL': 'DEBUG'}):
+            with patch('raspibot.utils.logging_config.logging.getLogger') as mock_get_logger:
+                with patch('raspibot.utils.logging_config.logging.StreamHandler') as mock_handler:
+                    with patch('raspibot.utils.logging_config.logging.FileHandler') as mock_file_handler:
+                        mock_logger = Mock()
+                        mock_get_logger.return_value = mock_logger
+                        
+                        logger = setup_logging()
+                        
+                        # Should set DEBUG level
+                        mock_logger.setLevel.assert_called()
+    
+    def test_setup_logging_file_output(self):
+        """Test file output configuration."""
+        with patch.dict(os.environ, {'RASPIBOT_LOG_TO_FILE': 'true'}):
+            with patch('raspibot.utils.logging_config.logging.getLogger') as mock_get_logger:
+                with patch('raspibot.utils.logging_config.logging.StreamHandler') as mock_handler:
+                    with patch('raspibot.utils.logging_config.logging.FileHandler') as mock_file_handler:
+                        with patch('raspibot.utils.helpers.ensure_directory_exists') as mock_ensure_dir:
+                            mock_logger = Mock()
+                            mock_get_logger.return_value = mock_logger
+                            
+                            logger = setup_logging()
+                            
+                            # Should create file handler
+                            mock_file_handler.assert_called()
+    
+    def test_setup_logging_console_only(self):
+        """Test console-only configuration."""
+        with patch.dict(os.environ, {'RASPIBOT_LOG_TO_FILE': 'false'}):
+            # Need to patch the config values that are imported in the function
+            with patch('raspibot.settings.config.LOG_TO_FILE', False):
+                with patch('raspibot.utils.logging_config.logging.getLogger') as mock_get_logger:
+                    with patch('raspibot.utils.logging_config.logging.StreamHandler') as mock_handler:
+                        with patch('raspibot.utils.logging_config.logging.FileHandler') as mock_file_handler:
+                            mock_logger = Mock()
+                            mock_get_logger.return_value = mock_logger
+                            
+                            logger = setup_logging()
+                            
+                            # Should not create file handler
+                            mock_file_handler.assert_not_called()

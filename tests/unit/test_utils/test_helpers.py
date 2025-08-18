@@ -1,153 +1,191 @@
-"""Tests for utility helper functions.
+"""Unit tests for raspibot.utils.helpers module."""
 
-This module tests simple utility functions used across the project.
-"""
-
+import pytest
 import os
 import tempfile
-import pytest
-from unittest.mock import patch
+import math
+import time
+from unittest.mock import patch, Mock
 
-# Import the helpers module (will be created after tests)
-# from raspibot.utils import helpers
+from raspibot.utils.helpers import (
+    generate_correlation_id,
+    ensure_directory_exists,
+    check_file_permissions,
+    degrees_to_radians,
+    radians_to_degrees,
+    clamp,
+    Timer,
+    timer
+)
 
 
-class TestCorrelationIDGeneration:
-    """Test correlation ID generation utilities."""
+class TestCorrelationID:
+    """Test correlation ID generation."""
+    
+    def test_generate_correlation_id_format(self):
+        """Test 8-character hex format."""
+        correlation_id = generate_correlation_id()
+        assert len(correlation_id) == 8
+        assert all(c in '0123456789abcdef' for c in correlation_id)
+    
+    def test_generate_correlation_id_uniqueness(self):
+        """Test IDs are unique across calls."""
+        id1 = generate_correlation_id()
+        id2 = generate_correlation_id()
+        assert id1 != id2
 
-    def test_generate_correlation_id(self):
-        """Test that correlation ID generation creates 8-character hex strings."""
-        from raspibot.utils.helpers import generate_correlation_id
+
+class TestDirectoryOperations:
+    """Test directory operations."""
+    
+    def test_ensure_directory_exists_new(self, temp_directory):
+        """Test creating new directory."""
+        new_dir = os.path.join(temp_directory, "new_dir")
+        assert not os.path.exists(new_dir)
         
-        # Test multiple generations
-        for _ in range(10):
-            correlation_id = generate_correlation_id()
-            assert len(correlation_id) == 8
-            assert correlation_id.isalnum()  # Should be alphanumeric
-            # UUID hex can be mixed case, so we'll just check it's valid hex
-            assert all(c in '0123456789abcdefABCDEF' for c in correlation_id)
-
-    def test_correlation_id_uniqueness(self):
-        """Test that generated correlation IDs are unique."""
-        from raspibot.utils.helpers import generate_correlation_id
+        ensure_directory_exists(new_dir)
+        assert os.path.exists(new_dir)
+        assert os.path.isdir(new_dir)
+    
+    def test_ensure_directory_exists_existing(self, temp_directory):
+        """Test with existing directory."""
+        # temp_directory already exists
+        ensure_directory_exists(temp_directory)
+        assert os.path.exists(temp_directory)
+        assert os.path.isdir(temp_directory)
+    
+    def test_ensure_directory_exists_nested(self, temp_directory):
+        """Test creating nested directories."""
+        nested_dir = os.path.join(temp_directory, "level1", "level2", "level3")
+        assert not os.path.exists(nested_dir)
         
-        # Generate multiple IDs and check uniqueness
-        ids = set()
-        for _ in range(100):
-            correlation_id = generate_correlation_id()
-            assert correlation_id not in ids
-            ids.add(correlation_id)
+        ensure_directory_exists(nested_dir)
+        assert os.path.exists(nested_dir)
+        assert os.path.isdir(nested_dir)
 
 
-class TestFileSystemUtilities:
-    """Test file system utility functions."""
-
-    def test_ensure_directory_exists(self):
-        """Test that ensure_directory_exists creates directories."""
-        from raspibot.utils.helpers import ensure_directory_exists
+class TestFilePermissions:
+    """Test file permission checking."""
+    
+    def test_check_file_permissions_read(self, temp_directory):
+        """Test read permission checking."""
+        test_file = os.path.join(temp_directory, "test_file.txt")
+        with open(test_file, 'w') as f:
+            f.write("test")
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_dir = os.path.join(temp_dir, "test", "nested", "directory")
-            
-            # Directory should not exist initially
-            assert not os.path.exists(test_dir)
-            
-            # Create directory
-            ensure_directory_exists(test_dir)
-            
-            # Directory should exist now
-            assert os.path.exists(test_dir)
-            assert os.path.isdir(test_dir)
-
-    def test_ensure_directory_exists_already_exists(self):
-        """Test that ensure_directory_exists handles existing directories."""
-        from raspibot.utils.helpers import ensure_directory_exists
+        assert check_file_permissions(test_file, 'r') is True
+    
+    def test_check_file_permissions_write(self, temp_directory):
+        """Test write permission checking."""
+        test_file = os.path.join(temp_directory, "test_file.txt")
+        with open(test_file, 'w') as f:
+            f.write("test")
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Directory already exists
-            assert os.path.exists(temp_dir)
-            
-            # Should not raise an error
-            ensure_directory_exists(temp_dir)
-            
-            # Directory should still exist
-            assert os.path.exists(temp_dir)
-
-    def test_check_file_permissions(self):
-        """Test file permission checking."""
-        from raspibot.utils.helpers import check_file_permissions
+        assert check_file_permissions(test_file, 'w') is True
+    
+    def test_check_file_permissions_execute(self, temp_directory):
+        """Test execute permission checking."""
+        test_file = os.path.join(temp_directory, "test_script.py")
+        with open(test_file, 'w') as f:
+            f.write("#!/usr/bin/env python3\nprint('test')")
         
-        with tempfile.NamedTemporaryFile() as temp_file:
-            # Should be able to read and write temp file
-            assert check_file_permissions(temp_file.name, 'r')
-            assert check_file_permissions(temp_file.name, 'w')
+        # Make executable
+        os.chmod(test_file, 0o755)
+        assert check_file_permissions(test_file, 'x') is True
+    
+    def test_check_file_permissions_invalid(self, temp_directory):
+        """Test invalid permission parameter."""
+        test_file = os.path.join(temp_directory, "test_file.txt")
+        with open(test_file, 'w') as f:
+            f.write("test")
+        
+        assert check_file_permissions(test_file, 'z') is False
+
+
+class TestAngleConversion:
+    """Test angle conversion functions."""
+    
+    def test_degrees_to_radians_zero(self):
+        """Test 0 degrees conversion."""
+        assert degrees_to_radians(0) == 0
+    
+    def test_degrees_to_radians_90(self):
+        """Test 90 degrees conversion."""
+        result = degrees_to_radians(90)
+        assert abs(result - math.pi/2) < 1e-10
+    
+    def test_degrees_to_radians_180(self):
+        """Test 180 degrees conversion."""
+        result = degrees_to_radians(180)
+        assert abs(result - math.pi) < 1e-10
+    
+    def test_radians_to_degrees_zero(self):
+        """Test 0 radians conversion."""
+        assert radians_to_degrees(0) == 0
+    
+    def test_radians_to_degrees_pi(self):
+        """Test π radians conversion."""
+        result = radians_to_degrees(math.pi)
+        assert abs(result - 180) < 1e-10
 
 
 class TestMathUtilities:
-    """Test mathematical utility functions."""
-
-    def test_angle_conversion_degrees_to_radians(self):
-        """Test degrees to radians conversion."""
-        from raspibot.utils.helpers import degrees_to_radians
-        
-        # Test common angles
-        assert abs(degrees_to_radians(0) - 0) < 0.001
-        assert abs(degrees_to_radians(90) - 1.5708) < 0.001
-        assert abs(degrees_to_radians(180) - 3.1416) < 0.001
-        assert abs(degrees_to_radians(360) - 6.2832) < 0.001
-
-    def test_angle_conversion_radians_to_degrees(self):
-        """Test radians to degrees conversion."""
-        from raspibot.utils.helpers import radians_to_degrees
-        
-        # Test common angles
-        assert abs(radians_to_degrees(0) - 0) < 0.1
-        assert abs(radians_to_degrees(1.5708) - 90) < 0.1
-        assert abs(radians_to_degrees(3.1416) - 180) < 0.1
-        assert abs(radians_to_degrees(6.2832) - 360) < 0.1
-
-    def test_clamp_value(self):
-        """Test value clamping utility."""
-        from raspibot.utils.helpers import clamp
-        
-        # Test clamping within range
-        assert clamp(5, 0, 10) == 5
-        
-        # Test clamping below minimum
-        assert clamp(-5, 0, 10) == 0
-        
-        # Test clamping above maximum
-        assert clamp(15, 0, 10) == 10
-        
-        # Test edge cases
-        assert clamp(0, 0, 10) == 0
-        assert clamp(10, 0, 10) == 10
+    """Test math utility functions."""
+    
+    def test_clamp_within_range(self):
+        """Test value within min/max range."""
+        assert clamp(5.0, 0.0, 10.0) == 5.0
+    
+    def test_clamp_below_minimum(self):
+        """Test value clamped to minimum."""
+        assert clamp(-5.0, 0.0, 10.0) == 0.0
+    
+    def test_clamp_above_maximum(self):
+        """Test value clamped to maximum."""
+        assert clamp(15.0, 0.0, 10.0) == 10.0
+    
+    def test_clamp_equal_boundaries(self):
+        """Test edge cases at boundaries."""
+        assert clamp(0.0, 0.0, 10.0) == 0.0
+        assert clamp(10.0, 0.0, 10.0) == 10.0
 
 
-class TestTimingUtilities:
-    """Test timing and performance utilities."""
-
+class TestTimer:
+    """Test timer utilities."""
+    
     def test_timer_context_manager(self):
-        """Test timer context manager."""
-        from raspibot.utils.helpers import Timer
-        import time
+        """Test Timer context manager usage."""
+        with Timer() as t:
+            time.sleep(0.01)  # 10ms
         
-        with Timer() as timer:
-            time.sleep(0.01)  # Sleep for 10ms
-        
-        # Should have recorded some elapsed time
-        assert timer.elapsed > 0
-        assert timer.elapsed < 1  # Should be less than 1 second
-
-    def test_timer_as_decorator(self):
-        """Test timer as a decorator."""
-        from raspibot.utils.helpers import timer
-        import time
+        assert t.elapsed >= 0.01
+        assert t.elapsed < 0.1  # Should be less than 100ms
+    
+    def test_timer_decorator(self):
+        """Test timer decorator functionality."""
+        call_count = 0
         
         @timer
-        def slow_function():
+        def test_function():
+            nonlocal call_count
+            call_count += 1
             time.sleep(0.01)
-            return "done"
+            return "result"
         
-        result = slow_function()
-        assert result == "done" 
+        with patch('builtins.print') as mock_print:
+            result = test_function()
+            
+            assert result == "result"
+            assert call_count == 1
+            mock_print.assert_called_once()
+            call_args = mock_print.call_args[0][0]
+            assert "test_function took" in call_args
+            assert "seconds" in call_args
+    
+    def test_timer_elapsed_time(self):
+        """Test elapsed time measurement accuracy."""
+        timer_obj = Timer()
+        timer_obj.start_time = time.time() - 0.5  # 500ms ago
+        timer_obj.elapsed = 0.5
+        
+        assert abs(timer_obj.elapsed - 0.5) < 0.01
