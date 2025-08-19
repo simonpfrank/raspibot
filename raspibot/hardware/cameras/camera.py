@@ -40,6 +40,9 @@ class Camera:
         display_resolution: Optional[Tuple[int, int]] = None,
         display_position: Optional[Tuple[int, int]] = None,
         display_mode: Optional[str] = None,
+        face_detection: bool = False,
+        face_detection_model: Optional[str] = None,
+        face_detection_threshold: Optional[float] = None,
     ) -> None:
         """
         Initialize Universal Camera.
@@ -50,6 +53,9 @@ class Camera:
             display_resolution: Display resolution (from config if None)
             display_position: Display position (from config if None)
             display_mode: Display mode ("screen", "connect", "ssh", "none")
+            face_detection: Enable face detection (default False)
+            face_detection_model: Path to alternative model (default None)
+            face_detection_threshold: confidence in decimal
         """
         if not PICAMERA2_AVAILABLE:
             raise ImportError(
@@ -65,7 +71,18 @@ class Camera:
             display_resolution,
             display_position,
             display_mode,
+            face_detection_threshold,
         )
+
+        # Face detection setup
+        self.face_detection_enabled = face_detection
+        self.face_detector = None
+        self.face_detections = []
+        self._current_frame = None
+        self.face_detection_model = None
+
+        if self.face_detection_enabled:
+            self._setup_face_detection()
 
         # Auto-detect camera type and initialize
         self.camera_type = self._detect_camera_type()
@@ -83,6 +100,9 @@ class Camera:
         self.logger.info(
             f"Camera initialized: {self.camera_type} camera {self.camera_device_id}"
         )
+        if self.face_detection_enabled:
+            self.logger.info("Face detection enabled")
+            self.face_detection_model = face_detection_model
 
     def _load_config_defaults(
         self,
@@ -91,6 +111,7 @@ class Camera:
         display_resolution,
         display_position,
         display_mode,
+        face_detection_threshold,
     ) -> None:
         """Load settings from config.py."""
         self.camera_resolution = camera_resolution or CAMERA_RESOLUTION
@@ -104,6 +125,9 @@ class Camera:
         self.iou_threshold = AI_IOU_THRESHOLD
         self.max_detections = AI_MAX_DETECTIONS
         self.inference_frame_rate = AI_INFERERENCE_FRAME_RATE
+        self.face_detection_threshold = (
+            face_detection_threshold or FACE_DETECTION_THRESHOLD
+        )
 
         # Setup display environment
         self._setup_display_environment()
@@ -231,6 +255,22 @@ class Camera:
         except Exception as e:
             self.logger.error(
                 f"Camera._setup_ai_detection failed: {type(e).__name__}: {e}"
+            )
+            raise
+
+    def _setup_face_detection(self) -> None:
+        """Initialize face detection module."""
+        try:
+            from raspibot.vision.face_detection import FaceDetector
+
+            self.face_detector = FaceDetector(
+                confidence_threshold=self.face_detection_threshold,
+                model_path=self.face_detection_model,
+            )
+            self.logger.info("Face detection initialized successfully")
+        except Exception as e:
+            self.logger.error(
+                f"Camera._setup_face_detection failed: {type(e).__name__}: {e}"
             )
             raise
 
@@ -656,6 +696,79 @@ class Camera:
             self.add_screen_text(m, label, x + 5, y + 15)
             cv2.rectangle(m.array, (x, y), (x + w, y + h), (0, 255, 0, 0), thickness=2)
 
+    def _process_face_detections(self, m: MappedArray) -> None:
+        """Process face detection using current frame from MappedArray."""
+        try:
+            # Clear previous detections
+            self.face_detections = []
+
+            if self.camera_type == "pi_ai" and hasattr(self, "detections"):
+                # For AI cameras, test full frame face detection first as fallback
+                try:
+                    for detection in self.detections:
+                        if detection["label"] == "person":
+                            try:
+                                face_results = (
+                                    self.face_detector.detect_faces_in_region(
+                                        m.array, tuple(detection["box"])
+                                    )
+                                )
+                                if face_results:
+                                    self.logger.info(
+                                        f"Found {len(face_results)} faces in person region"
+                                    )
+                                    for face in face_results:
+                                        face_with_center = self._calculate_face_center(
+                                            face
+                                        )
+                                        self.face_detections.append(face_with_center)
+
+                            except Exception as face_ex:
+                                self.logger.warning(
+                                    f"Face detection failed for person {detection['box']}: {face_ex}"
+                                )
+                except Exception as full_ex:
+                    self.logger.warning(f"Full frame face detection failed: {full_ex}")
+            else:
+                # For non-AI cameras, detect faces in full frame
+                self.logger.info("Processing full frame face detection")
+                face_results = self.face_detector.detect_faces(m.array)
+                if face_results:
+                    self.logger.info(f"Found {len(face_results)} faces in full frame")
+                    for face in face_results:
+                        face_with_center = self._calculate_face_center(face)
+                        self.face_detections.append(face_with_center)
+
+        except Exception as e:
+            self.logger.warning(f"Face detection processing failed: {e}")
+            self.face_detections = []
+
+    def _calculate_face_center(self, face: Dict) -> Dict:
+        """Calculate center point for a face detection."""
+        face_copy = face.copy()
+        x, y, w, h = face["box"]
+        center_x = x + w // 2
+        center_y = y + h // 2
+        face_copy["center"] = (center_x, center_y)
+        return face_copy
+
+    def _calculate_face_centers(self, face_detections: List[Dict]) -> List[Dict]:
+        """Calculate center points for multiple face detections."""
+        return [self._calculate_face_center(face) for face in face_detections]
+
+    def draw_faces(self, m: MappedArray, faces: List[Dict]) -> None:
+        """Draw white bounding boxes and center points for faces."""
+        for face in faces:
+            x, y, w, h = face["box"]
+
+            # Draw white bounding box
+            cv2.rectangle(m.array, (x, y), (x + w, y + h), (255, 255, 255), thickness=2)
+
+            # Draw center point if available
+            if "center" in face:
+                center_x, center_y = face["center"]
+                cv2.circle(m.array, (center_x, center_y), 3, (255, 255, 255), -1)
+
     def annotate_screen(
         self, request, stream: str = "main", start_x: int = 10, start_y: int = 30
     ) -> None:
@@ -669,37 +782,78 @@ class Camera:
             new_x, new_y, text_width, text_height = self.add_screen_text(
                 m, f"FPS: {self.fps:.2f}", start_x, start_y
             )
+
+            # Face detection processing
+            if self.face_detection_enabled:
+                self._process_face_detections(m)
+                if self.face_detections:
+                    self.logger.info(f"Found {len(self.face_detections)} faces")
+
             if self.camera_type == "pi_ai":
                 start_x, new_y, text_width, text_height = self.add_screen_text(
                     m, f"Detections: {len(self.detections)}", new_x, new_y
                 )
                 self.draw_objects(m, self.detections)
 
+            # Draw faces if detected
+            if self.face_detection_enabled and self.face_detections:
+                self.draw_faces(m, self.face_detections)
+
 
 if __name__ == "__main__":
+    import time
+    from threading import Thread
+
     try:
         # Initialize camera in AI mode (auto-detects best available)
-        camera = Camera()
+        camera = Camera(face_detection=True)
 
         # Start the camera
         if camera.start():
             print(
                 f"{camera.camera_type.title()} camera started successfully. Close the preview window to stop."
             )
+            print(
+                f"Face detection: {'enabled' if camera.face_detection_enabled else 'disabled'}"
+            )
 
-            # Run the detect loop
+            # Run the detect loop in a separate thread
             if camera.camera_type == "pi_ai":
-                print("Running in AI detection mode...")
+                print("Running in AI detection mode with face detection...")
             else:
-                print("Running in display-only mode...")
+                print("Running in display-only mode with face detection...")
 
-            camera.process()
+            # Start detection in a thread
+            detection_thread = Thread(target=camera.process, daemon=True)
+            detection_thread.start()
+
+            # Status monitoring loop
+            print("Press Ctrl+C to stop")
+            try:
+                while detection_thread.is_alive():
+                    time.sleep(2)  # Status update every 2 seconds
+                    if hasattr(camera, "detections"):
+                        person_count = sum(
+                            1 for d in camera.detections if d["label"] == "person"
+                        )
+                        camera.logger.info(
+                            f"Status: {len(camera.detections)} total detections, {person_count} persons, {len(camera.face_detections)} faces"
+                        )
+                    else:
+                        print(f"Status: Face detections: {len(camera.face_detections)}")
+
+            except KeyboardInterrupt:
+                print("\nStopping...")
+                camera.is_detecting = False
 
         else:
             print("Failed to start camera")
 
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+
+        traceback.print_exc()
 
     finally:
         # Cleanup

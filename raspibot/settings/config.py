@@ -160,6 +160,7 @@ DETECTION_OVERLAP_THRESHOLD = 0.6
 AI_MAX_DETECTIONS: Final[int] = 20
 AI_CAMERA_DEVICE_ID: Final[int] = 0
 AI_INFERERENCE_FRAME_RATE: Final[int] = 30
+FACE_DETECTION_THRESHOLD: Final[float] = 0.5
 
 # NMS and Tracking Configuration
 NMS_IOU_THRESHOLD: Final[float] = 0.5  # IoU threshold for NMS deduplication

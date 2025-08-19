@@ -341,18 +341,16 @@ if __name__ == "__main__":
             print(f"Initialized {controller.get_controller_type()} controller")
             print(f"Available channels: {controller.get_available_channels()}")
 
-            for channel in controller.get_available_channels():
-                print(f"\nTesting servo on channel {channel}")
+            # print("Moving to 60°...")
+            # controller.set_servo_angle(0, 60)
+            # await asyncio.sleep(1)
 
-                print("Moving to 0°...")
-                controller.set_servo_angle(channel, 0)
-                await asyncio.sleep(1)
+            print("Moving to 90°...")
+            await controller.smooth_move_to_angle(1, 100, speed=0.5)
+            await asyncio.sleep(1)
 
-                print("Moving to 60°...")
-                await controller.smooth_move_to_angle(channel, 90, speed=0.5)
-                await asyncio.sleep(1)
-
-                print(f"Current angle: {controller.get_servo_angle(channel)}°")
+            print(f"Current angle: {controller.get_servo_angle(0)}°")
+            print(f"Current angle: {controller.get_servo_angle(1)}°")
 
             controller.shutdown()
             print("Demo completed")
