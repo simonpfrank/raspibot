@@ -161,6 +161,7 @@ AI_MAX_DETECTIONS: Final[int] = 20
 AI_CAMERA_DEVICE_ID: Final[int] = 0
 AI_INFERERENCE_FRAME_RATE: Final[int] = 30
 FACE_DETECTION_THRESHOLD: Final[float] = 0.5
+FACE_DETECTION_MODEL: Final[str] = "data/models/face_detection_yunet_2023mar.onnx"
 
 # NMS and Tracking Configuration
 NMS_IOU_THRESHOLD: Final[float] = 0.5  # IoU threshold for NMS deduplication

@@ -72,6 +72,7 @@ class Camera:
             display_position,
             display_mode,
             face_detection_threshold,
+            face_detection_model,
         )
 
         # Face detection setup
@@ -112,6 +113,7 @@ class Camera:
         display_position,
         display_mode,
         face_detection_threshold,
+        face_detection_model,
     ) -> None:
         """Load settings from config.py."""
         self.camera_resolution = camera_resolution or CAMERA_RESOLUTION
@@ -128,6 +130,7 @@ class Camera:
         self.face_detection_threshold = (
             face_detection_threshold or FACE_DETECTION_THRESHOLD
         )
+        self.face_detection_model = face_detection_model or FACE_DETECTION_MODEL
 
         # Setup display environment
         self._setup_display_environment()
