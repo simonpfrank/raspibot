@@ -7,6 +7,7 @@ A hobby development of simple robotics on a Raspberry Pi 5, progressing from bas
 ### ✅ Completed Features
 - [x] **Servo Control System** - Unified PCA9685 and GPIO servo controllers with asyncio support
 - [x] **Camera System** - Universal camera interface auto-detecting Pi AI, Pi Camera, or USB cameras
+- [x] **Face Detection** - Real-time face detection with multi-model support (Haar cascade, ONNX)
 - [x] **Room Scanning System** - Systematic room scanning with servo movement coordination
 - [x] **Object Detection** - Real-time object detection with hardware AI acceleration (Pi AI Camera)
 - [x] **Object Deduplication** - Advanced deduplication with spatial, temporal, and overlap algorithms
@@ -15,10 +16,12 @@ A hobby development of simple robotics on a Raspberry Pi 5, progressing from bas
 - [x] **Testing Framework** - Comprehensive unit and integration tests
 - [x] **Hardware Abstraction** - Modular design supporting multiple hardware configurations
 
-### 🚧 Planned (Not Yet Implemented)
-- [ ] **Face Detection & Tracking** - Real-time face detection with camera centering
-- [ ] **Face Recognition** - Person identification using face encodings
+### 🚧 In Development
+- [ ] **Face Detection Room Scanning** - Room scan with face detection and optimal positioning
 - [ ] **Pan/Tilt Tracking** - Automatic camera tracking of detected objects/faces
+
+### 📋 Planned (Not Yet Implemented)
+- [ ] **Face Recognition** - Person identification using face encodings
 - [ ] **Audio Enhancement** - Directional microphone array and wake word detection
 - [ ] **Voice Integration** - Speech-to-text, LLM integration, and voice response
 - [ ] **Mobility** - Wheeled base movement and autonomous navigation
@@ -27,7 +30,9 @@ A hobby development of simple robotics on a Raspberry Pi 5, progressing from bas
 
 ## 🎯 Project Aims
 
-* **Primary**: Pan and Tilt camera driven by face detection 🚧
+* **Primary**: Pan and Tilt camera driven by face detection ✅ + 🚧
+  - ✅ Real-time face detection implemented
+  - 🚧 Room scanning with face tracking in progress
 * **Secondary**: Face recognition using OpenCV 📋
 * **Tertiary**: Voice to LLM integration with voice response 📋
 * **Long-term**: Wheeled base movement and autonomous navigation 📋
@@ -35,6 +40,8 @@ A hobby development of simple robotics on a Raspberry Pi 5, progressing from bas
 ## 🔧 Current Capabilities
 
 * **Multi-Camera Support**: Automatically detects and uses Pi AI Camera, Pi Camera, or USB cameras
+* **Live Face Detection**: Real-time face detection with white bounding boxes during camera operation
+* **Multi-Model Face Detection**: Support for Haar cascade (default) and ONNX models (e.g., YuNet)
 * **Servo Control**: PCA9685 and GPIO servo controllers with smooth movement and jitter handling
 * **Room Scanning**: Systematic 360° scanning with intelligent position calculation
 * **Object Detection**: Real-time detection using hardware acceleration when available
@@ -54,6 +61,9 @@ A hobby development of simple robotics on a Raspberry Pi 5, progressing from bas
 ```bash
 # Install for development
 pip install -e ".[dev]"
+
+# Run camera with face detection
+python raspibot/hardware/cameras/camera.py
 
 # Run basic room scan demo
 python -m raspibot.core.room_scan
@@ -86,6 +96,7 @@ raspibot/
 │   │   ├── cameras/             # Universal camera support (Pi AI, Pi, USB)
 │   │   └── servos/              # Servo controllers (PCA9685, GPIO)
 │   ├── vision/                  # Computer vision modules
+│   │   ├── face_detection.py    # Multi-model face detection (Haar, ONNX)
 │   │   ├── deduplication.py     # Object deduplication algorithms
 │   │   └── search_pattern.py    # Search pattern utilities
 │   ├── movement/                # Movement and scanning
@@ -138,6 +149,9 @@ raspibot/
 ### Camera System
 - **Universal Interface**: Single Camera class auto-detects hardware
 - **Hardware Acceleration**: Pi AI Camera provides real-time object detection
+- **Live Face Detection**: Real-time face detection with configurable models and thresholds
+- **Dual-Mode Operation**: AI cameras detect faces in person regions, non-AI cameras on full frame
+- **Visual Feedback**: White bounding boxes and center points for detected faces
 - **Fallback Support**: Gracefully degrades to software detection for other cameras
 - **Threading**: Non-blocking detection processing
 
