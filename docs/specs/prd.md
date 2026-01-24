@@ -6,9 +6,10 @@
 A hobby development of simple robotics on a Raspberry Pi 5, progressing from basic pan/tilt camera control to autonomous movement capabilities.
 
 ### 1.2 Goals
-- **Primary**: Pan and Tilt camera driven by face detection
+- **Primary**: Pan, Tilt, and Roll head movement driven by face detection
 - **Secondary**: Face recognition using OpenCV
-- **Tertiary**: Voice to LLM integration with voice response
+- **Tertiary**: Directional audio detection (turn toward speaker)
+- **Quaternary**: Voice to LLM integration with voice response
 - **Long-term**: Wheeled base movement and autonomous navigation
 
 ### 1.3 Future Aspirations
@@ -17,26 +18,35 @@ A hobby development of simple robotics on a Raspberry Pi 5, progressing from bas
 
 ## 2. Hardware Requirements
 
-### 2.1 Phase 1 - Start (Current)
+### 2.1 Phase 1 - Core Hardware (Current)
 - Raspberry Pi 5 8GB
 - Adafruit 16-Channel 12-bit PWM/Servo Driver - I2C interface (PCA9685)
-- Adafruit mini Pan and Tilt kit with micro servos assembled
+- Adafruit mini Pan and Tilt kit with micro servos assembled (initial 2-axis)
+- **Upgrade**: Pan/Tilt/Roll 3-axis servo mount (e.g., FatShark FSV1603 or similar ~£25)
+- **Upgrade**: Robot head/enclosure compatible with 3-axis mount (to be sourced)
+- Note: Future upgrade path to Stewart platform (6-DOF) for more expressive movement
 
-### 2.3 Phase 2 - Vision Enhancement
+### 2.2 Phase 2 - Vision Enhancement
 - Raspberry Pi AI Camera or Pi Camera 3
 
-### 2.2 Phase 3 - Audio Enhancement
-- 4-8 microphone array hat for Raspberry Pi (hardware to be chosen)
+### 2.3 Phase 3 - Audio Enhancement
+- 2-6 microphone setup for directional audio detection
+  - Start with 2 microphones for basic left/right detection
+  - Expandable to 4-6 for more precise angular detection
+- USB microphones or microphone array HAT (hardware to be chosen)
 - Audio processing capabilities
 
-### 2.4 Phase 4 - Mobility
-- WaveShare Robot-Chassis-MP
-- Adafruit DC & Stepper Motor Bonnet for Raspberry Pi
-- Accelerometer/IMU sensor (for movement and interaction)
+### 2.4 Phase 4 - Voice Integration
+- Speaker for text-to-speech output (hardware to be chosen)
 
 ### 2.5 Phase 5 - Emotion Display
 - Small pixel-driven display (hardware to be chosen)
 - Emotion expression capabilities
+
+### 2.6 Phase 6 - Mobility
+- WaveShare Robot-Chassis-MP
+- Adafruit DC & Stepper Motor Bonnet for Raspberry Pi
+- Accelerometer/IMU sensor (for movement and interaction)
 
 ## 3. Software Architecture
 
@@ -123,7 +133,7 @@ raspibot/
 
 #### 3.2.2 Hardware Layer
 - **ServoController** (`hardware/servo_controller.py`): PCA9685 interface
-- **CameraTemplate** (`hardware/camera.py`): Camera abstraction
+- **CameraInterface** (`hardware/camera.py`): Camera abstraction
 - **MotorController** (`hardware/motors.py`): DC motor control
 - **SensorInterface** (`hardware/sensors.py`): Sensor data collection
 - **DisplayInterface** (`hardware/display.py`): Display hardware abstraction
@@ -175,6 +185,10 @@ raspibot/
 - [ ] Sleep mode (tilt down, pan center) with dramatic movement sequence
 - [ ] Activity monitoring for sleep triggers
 - [ ] Manual control interface (backlog)
+- [ ] **Upgrade to 3-axis pan/tilt/roll movement**
+- [ ] Roll axis for expressive head tilts (e.g., "curious" gesture)
+- [ ] Robot head enclosure integration
+- [ ] Calibration for 3-axis system
 
 **Technical Requirements:**
 - I2C communication with PCA9685
@@ -187,79 +201,63 @@ raspibot/
 - Sleep mode with camera processing disabled
 - Activity monitoring with face detection
 - Audio wake word detection during sleep
+- **3-axis servo coordination (pan, tilt, roll)**
+- **Roll axis integration with existing PanTiltSystem → PanTiltRollSystem**
+- **Head mounting compatibility and calibration**
 
-### 4.2 Phase 2 - Enhanced Vision and Voice
+### 4.2 Phase 2 - Face Recognition
 **Features:**
 - [ ] Face recognition (identify specific people)
-- [ ] Voice-to-LLM integration
-- [ ] Voice response system
-- [ ] Improved camera quality (Pi AI Camera/Pi Camera 3)
-- [ ] Multiple face tracking
-- [ ] Person following mode
+- [ ] Face encoding storage and database
+- [ ] Multiple face tracking and identification
+- [ ] Identity-based greeting behaviors
+- [ ] Unknown face handling
+- [ ] Person following mode (track identified person)
 
 **Technical Requirements:**
-- Face encoding storage and retrieval
-- Real-time speech processing
-- LLM API integration (local or cloud)
-- Text-to-speech output
-- Enhanced camera resolution and AI capabilities
+- Face encoding generation and storage
+- face_recognition library or dlib integration
+- Database for known faces (SQLite or file-based)
+- Real-time recognition performance (>5 FPS with recognition)
+- Enhanced camera resolution (Pi AI Camera/Pi Camera 3)
 
-### 4.2 Phase 2 - Enhanced Vision and Voice
+### 4.3 Phase 3 - Directional Audio
 **Features:**
-- [ ] Face recognition (identify specific people)
-- [ ] Voice-to-LLM integration
-- [ ] Voice response system
-- [ ] Improved camera quality (Pi AI Camera/Pi Camera 3)
-- [ ] Multiple face tracking
-- [ ] Person following mode
+- [ ] Multi-microphone setup (2-6 microphones)
+- [ ] Sound direction detection (identify direction of speaker)
+- [ ] Background noise suppression (adaptive filtering)
+- [ ] Turn head toward sound source (audio-first behavior)
+- [ ] Visual confirmation after audio turn (look for face in that direction)
+- [ ] Audio-visual coordination (correlate voice direction with detected face)
+- [ ] Wake word detection with directional awareness
+
+**Behavior:** When audio is detected from a direction:
+1. Turn head toward sound source (even if no face visible)
+2. Camera then searches for face in that direction
+3. If face found, track it; if not, return to previous position or continue listening
 
 **Technical Requirements:**
-- Face encoding storage and retrieval
-- Real-time speech processing
-- LLM API integration (local or cloud)
-- Text-to-speech output
-- Enhanced camera resolution and AI capabilities
+- Time Difference of Arrival (TDOA) or beamforming for direction
+- Minimum 2 microphones for basic left/right detection
+- 4-6 microphones for more precise angular detection
+- Noise reduction algorithms (spectral subtraction or similar)
+- Integration with pan/tilt/roll system for head turning
+- Audio-face correlation for conversation tracking
+- Timeout behavior when no face found after audio turn
 
-
-### 4.2 Phase 2 - Enhanced Vision
+### 4.4 Phase 4 - Voice and LLM Integration
 **Features:**
-- [ ] Face recognition (identify specific people)
-- [ ] Voice-to-LLM integration
-- [ ] Voice response system
-- [ ] Improved camera quality (Pi AI Camera/Pi Camera 3)
-- [ ] Multiple face tracking
-- [ ] Person following mode
+- [ ] Speech-to-text processing
+- [ ] LLM API integration (cloud-based initially)
+- [ ] Text-to-speech response
+- [ ] Conversational interaction
+- [ ] Voice command recognition
 
 **Technical Requirements:**
-- Face encoding storage and retrieval
-- Enhanced camera resolution and AI capabilities
-
-### 4.3 Phase 3 - Audio Enhancement
-**Features:**
-- [ ] Directional microphone array setup
-- [ ] Sound direction detection (identify direction of noises)
-- [ ] Background noise reduction (lower gain on continual noise sources)
-- [ ] Wake word detection
-- [ ] Wake word direction with camera focus on that face
-- [ ] Temporary face-conversation association (until conversation ends)
-
-**Technical Requirements:**
-- Multi-microphone array processing
-- Real-time audio direction finding
-- Adaptive noise reduction algorithms
-- Wake word detection with direction
-- Face-audio correlation system
-- Audio-visual coordination
-
-#### 4.3.5 LLM Enhancement
-- [ ] Real-time speech processing (optional)
-- [ ] LLM API integration (local or cloud)
-- [ ] Text-to-speech output
-
-**Technical Requirements:**
-- Real time speech processing (optional)
-- speech to text/text to speech API
-- Simple LLM integration
+- STT API (Whisper, Google Speech, or similar)
+- TTS API (pyttsx3, Google TTS, or ElevenLabs)
+- LLM API integration (OpenAI, Anthropic, or local)
+- Response latency <2 seconds
 
 ### 4.5 Phase 5 - Emotion Display
 **Features:**
@@ -354,51 +352,63 @@ raspibot/
 
 ## 8. Development Milestones
 
-### 8.1 Milestone 1: Basic Infrastructure (Week 1-2)
-- [ ] Project structure setup
-- [ ] Hardware configuration
-- [ ] Basic servo control
+### 8.1 Milestone 1: Basic Infrastructure ✓
+- [x] Project structure setup
+- [x] Hardware configuration
+- [x] Basic servo control (2-axis pan/tilt)
+- [x] Anti-jitter measures
+- [x] Calibration tools
+
+### 8.2 Milestone 2: Face Detection & Tracking
+- [ ] Camera interface (multi-camera support)
+- [ ] OpenCV integration with YuNet
+- [ ] Real-time face detection
+- [ ] Pan/tilt tracking
 - [ ] Sleep mode implementation
 - [ ] Activity monitoring system
 
+### 8.3 Milestone 3: 3-Axis Head Movement
+- [ ] Upgrade to pan/tilt/roll hardware (FatShark or similar)
+- [ ] PanTiltRollSystem implementation
+- [ ] Roll axis calibration
+- [ ] Expressive head tilts ("curious" gesture)
+- [ ] Robot head enclosure integration
 
-### 8.2 Milestone 2: Face Detection (Week 3-4)
-- [ ] Camera interface
-- [ ] OpenCV integration
-- [ ] Real-time face detection
-- [ ] Pan/tilt tracking
-- [ ] Calibration tools
-- [ ] Sleep mode with camera disabled, audio active
-- [ ] Wake word detection during sleep
-
-### 8.3 Milestone 3: Audio Enhancement (Week 5-6)
-- [ ] Microphone array setup and testing
-- [ ] Sound direction detection
-- [ ] Wake word detection
-- [ ] Audio-visual coordination
-
-### 8.4 Milestone 4: Face Recognition (Week 7-8)
+### 8.4 Milestone 4: Face Recognition
 - [ ] Face encoding system
 - [ ] Recognition database
 - [ ] Identity-based behaviors
+- [ ] Unknown face handling
 
-### 8.5 Milestone 5: Emotion Display (Week 9-10)
-- [ ] Display hardware setup
-- [ ] Basic emotion expressions
-- [ ] Emotion state integration
-- [ ] Enhanced emotion patterns
-- [ ] Accelerometer integration
-- [ ] Physical interaction detection
+### 8.5 Milestone 5: Directional Audio
+- [ ] Multi-microphone setup (2-6 mics)
+- [ ] Sound direction detection (TDOA/beamforming)
+- [ ] Background noise suppression
+- [ ] Audio-first head turning behavior
+- [ ] Audio-visual coordination
+- [ ] Wake word detection
 
-### 8.6 Milestone 6: Voice Integration (Week 11-12)
+### 8.6 Milestone 6: Voice & LLM Integration
 - [ ] Speech-to-text implementation
-- [ ] LLM integration
+- [ ] LLM API integration
 - [ ] Text-to-speech output
 - [ ] Voice command processing
 
+### 8.7 Milestone 7: Emotion Display
+- [ ] Display hardware setup
+- [ ] Basic emotion expressions
+- [ ] Emotion state integration
+- [ ] Physical interaction detection (accelerometer)
+
 ## 9. Future Enhancements
 
-### 9.1 Movement and Locomotion
+### 9.1 Expressive Head Movement Upgrade
+- Stewart platform (6-DOF) for highly expressive head movement
+- Reachy Mini style motion capabilities
+- Inverse kinematics for natural head positioning
+- More nuanced emotional expressions through movement
+
+### 9.2 Movement and Locomotion
 - Wheeled base movement implementation
 - Obstacle detection and avoidance
 - Autonomous navigation capabilities
@@ -406,16 +416,16 @@ raspibot/
 - Accelerometer-based movement feedback
 - Balance and orientation detection
 
-### 9.2 Advanced AI Features
+### 9.3 Advanced AI Features
 - On-device model inference with Pi AI Camera
 - Custom trained models for specific recognition tasks
 - Edge AI optimization for real-time processing
 - Object detection using existing YOLO11 model ?
 
-### 9.3 Connectivity and Remote Control
+### 9.4 Connectivity and Remote Control
 - Web-based control interface
 
-### 9.4 Backlog
+### 9.5 Backlog
 - Mobile app integration
 - Remote monitoring capabilities
 - Cloud data synchronization

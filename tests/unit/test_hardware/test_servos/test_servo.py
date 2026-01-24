@@ -92,42 +92,42 @@ class TestUtilityFunctions:
 
 class TestSmoothMoveImplementation:
     """Test shared smooth movement implementation."""
-    
+
     @pytest.mark.asyncio
     async def test_smooth_move_small_diff(self):
         """Test no movement for <0.5 degree difference."""
         mock_controller = Mock()
         mock_controller.get_servo_angle.return_value = 90.0
-        
-        await _smooth_move_implementation(mock_controller, 0, 90.4, 1.0)
-        
+
+        await _smooth_move_implementation(mock_controller, "pan", 90.4, 1.0)
+
         # Should not call set_servo_angle since difference is < 0.5
         mock_controller.set_servo_angle.assert_not_called()
-    
+
     @pytest.mark.asyncio
     async def test_smooth_move_normal(self):
         """Test step calculation and movement sequence."""
         mock_controller = Mock()
         mock_controller.get_servo_angle.return_value = 90.0
-        
+
         with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-            await _smooth_move_implementation(mock_controller, 0, 120.0, 1.0)
-        
+            await _smooth_move_implementation(mock_controller, "pan", 120.0, 1.0)
+
         # Should call set_servo_angle multiple times for smooth movement
         assert mock_controller.set_servo_angle.call_count > 1
-        
+
         # Final call should be with target angle
         final_call = mock_controller.set_servo_angle.call_args_list[-1]
         assert final_call[0][1] == 120.0
-    
+
     @pytest.mark.asyncio
     async def test_smooth_move_angle_validation(self):
         """Test invalid target angle handling."""
         mock_controller = Mock()
         mock_controller.get_servo_angle.return_value = 90.0
-        
+
         with pytest.raises(HardwareException):
-            await _smooth_move_implementation(mock_controller, 0, 200.0, 1.0)
+            await _smooth_move_implementation(mock_controller, "pan", 200.0, 1.0)
 
 
 class TestPCA9685ServoController:
@@ -142,16 +142,16 @@ class TestPCA9685ServoController:
 
 class TestGPIOServoController:
     """Test GPIO servo controller."""
-    
+
     def test_init_without_gpio(self):
         """Test initialization when RPi.GPIO unavailable (logs warning but doesn't fail)."""
         with patch('builtins.__import__', side_effect=ImportError("No module named 'RPi.GPIO'")):
             controller = GPIOServoController()
-            assert controller.servo_pins == {0: 18, 1: 19}  # Actual default pins
+            assert controller.servo_pins == {"pan": 17, "tilt": 18}  # Default pins
             assert controller.current_angles == {}  # No angles set when GPIO unavailable
             assert controller.calibration_offsets == {}
-            assert controller.gpio_available is False  # When GPIO not available
-    
+            assert controller.gpio_available is False
+
     def test_init_with_gpio_mock(self, mock_gpio):
         """Test successful initialization with mocked GPIO."""
         with patch('builtins.__import__') as mock_import:
@@ -160,19 +160,19 @@ class TestGPIOServoController:
                     return mock_gpio['gpio']
                 return __import__(name, *args, **kwargs)
             mock_import.side_effect = import_side_effect
-            
+
             controller = GPIOServoController()
-            
-            assert controller.servo_pins == {0: 18, 1: 19}  # Actual default pins
+
+            assert controller.servo_pins == {"pan": 17, "tilt": 18}
             assert controller.gpio_available is True
-    
+
     def test_init_custom_pins(self):
         """Test initialization with custom pin mapping."""
-        custom_pins = {0: 12, 1: 13}
+        custom_pins = {"pan": 12, "tilt": 13}
         controller = GPIOServoController(servo_pins=custom_pins)
-        
+
         assert controller.servo_pins == custom_pins
-    
+
     def test_set_servo_angle_valid(self, mock_gpio):
         """Test setting valid angles."""
         with patch('builtins.__import__') as mock_import:
@@ -181,20 +181,27 @@ class TestGPIOServoController:
                     return mock_gpio['gpio']
                 return __import__(name, *args, **kwargs)
             mock_import.side_effect = import_side_effect
-            
+
             controller = GPIOServoController()
-            controller.set_servo_angle(0, 90)
-            
+            controller.set_servo_angle("pan", 90)
+
             # 90° is in the jitter zone and gets adjusted to 86°
-            assert controller.current_angles[0] == 86
-    
+            assert controller.current_angles["pan"] == 86
+
     def test_set_servo_angle_invalid(self):
         """Test invalid angle handling."""
         controller = GPIOServoController()
-        
+
         with pytest.raises(HardwareException, match="Invalid angle"):
-            controller.set_servo_angle(0, -10)
-    
+            controller.set_servo_angle("pan", -10)
+
+    def test_set_servo_angle_unknown_servo(self):
+        """Test unknown servo name raises error."""
+        controller = GPIOServoController()
+
+        with pytest.raises(HardwareException, match="Unknown servo 'invalid'"):
+            controller.set_servo_angle("invalid", 90)
+
     def test_get_servo_angle(self, mock_gpio):
         """Test angle retrieval."""
         with patch('builtins.__import__') as mock_import:
@@ -203,46 +210,46 @@ class TestGPIOServoController:
                     return mock_gpio['gpio']
                 return __import__(name, *args, **kwargs)
             mock_import.side_effect = import_side_effect
-            
+
             controller = GPIOServoController()
-            controller.current_angles[0] = 45
-            
-            assert controller.get_servo_angle(0) == 45
-            
-            # Test default angle for channel that wasn't explicitly set
-            assert controller.get_servo_angle(1) == 90  # Default from initialization
-    
+            controller.current_angles["pan"] = 45
+
+            assert controller.get_servo_angle("pan") == 45
+
+            # Test default angle for servo that wasn't explicitly set
+            assert controller.get_servo_angle("tilt") == 90  # Default from initialization
+
     def test_set_calibration_offset(self):
         """Test calibration offset setting."""
         controller = GPIOServoController()
-        
-        controller.set_calibration_offset(0, 5.0)
-        assert controller.calibration_offsets[0] == 5.0
-        
-        controller.set_calibration_offset(1, -2.5)
-        assert controller.calibration_offsets[1] == -2.5
-    
+
+        controller.set_calibration_offset("pan", 5.0)
+        assert controller.calibration_offsets["pan"] == 5.0
+
+        controller.set_calibration_offset("tilt", -2.5)
+        assert controller.calibration_offsets["tilt"] == -2.5
+
     def test_controller_info_methods(self):
         """Test controller info methods."""
         controller = GPIOServoController()
-        
+
         assert controller.get_controller_type() == "GPIO"
-        assert controller.get_available_channels() == [0, 1]
-    
+        assert controller.get_available_servos() == ["pan", "tilt"]
+
     def test_shutdown_cleanup(self):
         """Test proper shutdown."""
         controller = GPIOServoController()
         controller.shutdown()
-        
+
         # Should not throw exception
-    
+
     @pytest.mark.asyncio
     async def test_smooth_move_to_angle_async(self):
         """Test async smooth movement."""
         controller = GPIOServoController()
-        controller.current_angles[0] = 90
-        
+        controller.current_angles["pan"] = 90
+
         with patch('raspibot.hardware.servos.servo._smooth_move_implementation', new_callable=AsyncMock) as mock_smooth:
-            await controller.smooth_move_to_angle(0, 120, 1.0)
-            
-            mock_smooth.assert_called_once_with(controller, 0, 120, 1.0)
+            await controller.smooth_move_to_angle("pan", 120, 1.0)
+
+            mock_smooth.assert_called_once_with(controller, "pan", 120, 1.0)

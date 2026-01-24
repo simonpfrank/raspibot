@@ -4,6 +4,65 @@
 
 This document explains how to set up display functionality when using Raspberry Pi Connect (WayVNC) for remote desktop access.
 
+## Pi 5 Headless Display Issue
+
+**Problem**: Raspberry Pi 5 running headless (no monitor connected) cannot use Wayland/WayVNC for Pi Connect screen sharing. The GPU/DRM devices (`/dev/dri/`) are not created without a physical display, causing Wayfire to crash with "Found 0 GPUs, cannot create backend".
+
+**Symptoms**:
+- Pi Connect shows "Screen sharing: allowed" but cannot connect
+- `~/.xsession-errors` shows: `Failed to open any DRM device`
+- `/dev/dri/` directory does not exist
+- `rpi-connect-wayvnc` service fails with: `test -S /run/user/1001/wayland-0` failure
+
+### Solution 1: X11 Mode (Headless Workaround)
+
+Use X11 instead of Wayland when running without a monitor:
+
+```bash
+sudo raspi-config
+```
+→ Advanced Options → Wayland → **X11** → Reboot
+
+X11 can use a virtual framebuffer and works headless with Pi Connect.
+
+### Solution 2: Connect HDMI Display (Enables Wayland)
+
+When you have a micro HDMI adapter/cable:
+
+1. Connect any HDMI display to Pi 5 (micro HDMI port)
+2. Switch back to Wayland:
+   ```bash
+   sudo raspi-config
+   ```
+   → Advanced Options → Wayland → **Wayfire** (or **LabWC**) → Reboot
+
+3. Verify it works:
+   ```bash
+   ls -la /dev/dri/           # Should show card0, card1, renderD128
+   ls -la /run/user/1001/wayland*  # Should show wayland-0 or wayland-1
+   systemctl --user status rpi-connect-wayvnc  # Should be active
+   ```
+
+4. Pi Connect screen sharing should now work
+
+### Solution 3: HDMI Dummy Plug (Permanent Headless Wayland)
+
+For permanent headless Wayland operation, use an HDMI dummy plug (~$5-10):
+- Plugs into micro HDMI port
+- Emulates a connected display
+- GPU devices are created
+- Wayland/WayVNC works without real monitor
+
+### Switching Between X11 and Wayland
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| X11 | `sudo raspi-config` → Advanced → Wayland → X11 | Headless, no display |
+| Wayfire | `sudo raspi-config` → Advanced → Wayland → Wayfire | Display connected |
+| LabWC | `sudo raspi-config` → Advanced → Wayland → LabWC | Display connected (alternative) |
+
+**Always reboot after changing this setting.**
+
 ## Environment Detection
 
 The Display class automatically detects and handles different display environments:
@@ -63,6 +122,19 @@ source .venv/bin/activate
 ```python
 display = Display(headless=True)
 ```
+
+### Issue: Pi Connect screen sharing doesn't work (Pi 5 headless)
+**Cause**: No GPU devices created without display connected
+**Solution**: Switch to X11 mode (see "Pi 5 Headless Display Issue" above)
+```bash
+sudo raspi-config  # → Advanced Options → Wayland → X11
+sudo reboot
+```
+
+### Issue: Qt platform plugin "wayland" fails to load
+**Error**: `Could not load the Qt platform plugin "wayland"`
+**Cause**: No Wayland display socket exists
+**Solution**: Either switch to X11 or connect a display (see above)
 
 ## Display Configuration
 

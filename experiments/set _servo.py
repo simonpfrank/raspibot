@@ -9,10 +9,8 @@ from raspibot.hardware.servos.servo import PCA9685ServoController
 
 controller = PCA9685ServoController()
 
-for angle in range(90, 110):
-    print(angle)
-    controller.set_servo_angle("pan", angle)
-    time.sleep(0.5)
-
-controller.set_servo_angle("pan", 14)
+print("Moving 0")
+# .set_servo_angle("pan", 0)
+print("Moving 1")
+controller.set_servo_angle("tilt", 80)
 controller.shutdown()

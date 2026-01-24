@@ -18,16 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from raspibot.hardware.cameras.camera import Camera
 from raspibot.hardware.servos.controller_selector import get_servo_controller
-from raspibot.settings.config import (
-    SERVO_PAN_CHANNEL,
-    SERVO_TILT_CHANNEL,
-    SERVO_PAN_MIN_ANGLE,
-    SERVO_PAN_MAX_ANGLE,
-    SERVO_PAN_CENTER,
-    SERVO_TILT_MIN_ANGLE,
-    SERVO_TILT_MAX_ANGLE,
-    SERVO_TILT_CENTER,
-)
+from raspibot.settings.config import SERVO_CONFIGS
 
 
 @dataclass
@@ -126,24 +117,28 @@ class RoomScanner:
         """Calculate optimal scan positions based on FOV and overlap."""
         positions = []
 
+        pan_config = SERVO_CONFIGS["pan"]
+        pan_min = pan_config["min_angle"]
+        pan_max = pan_config["max_angle"]
+
         # Calculate effective FOV per position (accounting for overlap)
         effective_fov = self.config.fov_horizontal - self.config.scan_overlap
 
         # Calculate scan range
-        scan_range = SERVO_PAN_MAX_ANGLE - SERVO_PAN_MIN_ANGLE
+        scan_range = pan_max - pan_min
 
         # Calculate number of positions needed
         num_positions = int(scan_range / effective_fov) + 1
 
         # Generate evenly spaced positions
         for i in range(num_positions):
-            position = SERVO_PAN_MIN_ANGLE + (i * effective_fov)
-            if position <= SERVO_PAN_MAX_ANGLE:
+            position = pan_min + (i * effective_fov)
+            if position <= pan_max:
                 positions.append(position)
 
         # Ensure we cover the full range
-        if positions[-1] < SERVO_PAN_MAX_ANGLE - 5:  # 5 degree tolerance
-            positions.append(SERVO_PAN_MAX_ANGLE)
+        if positions[-1] < pan_max - 5:  # 5 degree tolerance
+            positions.append(pan_max)
 
         print(
             f"Calculated {len(positions)} scan positions: {[f'{p:.1f}°' for p in positions]}"
@@ -279,8 +274,8 @@ class RoomScanner:
 
                 # Move to position directly
                 print(f"Moving to Pan={pan_angle:.1f}°, Tilt={self.config.scan_tilt:.1f}°")
-                self.servo_controller.set_servo_angle(SERVO_PAN_CHANNEL, pan_angle)
-                self.servo_controller.set_servo_angle(SERVO_TILT_CHANNEL, self.config.scan_tilt)
+                self.servo_controller.set_servo_angle("pan", pan_angle)
+                self.servo_controller.set_servo_angle("tilt", self.config.scan_tilt)
 
                 # Wait for settling
                 print(f"  Settling for {self.config.settling_time}s...")
@@ -316,9 +311,11 @@ class RoomScanner:
                     print(f"    {obj.label}: {obj.confidence:.2f}")
 
             # Return to center
-            print(f"\nReturning to center position...")
-            self.servo_controller.set_servo_angle(SERVO_PAN_CHANNEL, SERVO_PAN_CENTER)
-            self.servo_controller.set_servo_angle(SERVO_TILT_CHANNEL, SERVO_TILT_CENTER)
+            print("\nReturning to center position...")
+            pan_center = SERVO_CONFIGS["pan"]["default_angle"]
+            tilt_center = SERVO_CONFIGS["tilt"]["default_angle"]
+            self.servo_controller.set_servo_angle("pan", pan_center)
+            self.servo_controller.set_servo_angle("tilt", tilt_center)
 
         except KeyboardInterrupt:
             print("\nScan interrupted by user")

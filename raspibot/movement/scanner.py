@@ -8,12 +8,7 @@ camera position coverage.
 import asyncio
 import time
 from typing import List
-from raspibot.settings.config import (
-    SERVO_PAN_CHANNEL,
-    SERVO_TILT_CHANNEL,
-    SERVO_PAN_MIN_ANGLE,
-    SERVO_PAN_MAX_ANGLE,
-)
+from raspibot.settings.config import SERVO_CONFIGS
 
 
 class ScanPattern:
@@ -28,41 +23,47 @@ class ScanPattern:
         """Calculate pan angles for complete room coverage."""
         positions = []
 
+        pan_config = SERVO_CONFIGS["pan"]
+        pan_min = pan_config["min_angle"]
+        pan_max = pan_config["max_angle"]
+
         # Calculate effective FOV per position (accounting for overlap)
         effective_fov = self.fov_degrees - self.overlap_degrees
 
         # Calculate scan range
-        scan_range = SERVO_PAN_MAX_ANGLE - SERVO_PAN_MIN_ANGLE
+        scan_range = pan_max - pan_min
 
         # Calculate number of positions needed
         num_positions = int(scan_range / effective_fov) + 1
 
         # Generate evenly spaced positions
         for i in range(num_positions):
-            position = SERVO_PAN_MIN_ANGLE + (i * effective_fov)
-            if position <= SERVO_PAN_MAX_ANGLE:
+            position = pan_min + (i * effective_fov)
+            if position <= pan_max:
                 positions.append(position)
 
         # Ensure we cover the full range
-        if positions and positions[-1] < SERVO_PAN_MAX_ANGLE - 5:  # 5 degree tolerance
-            positions.append(SERVO_PAN_MAX_ANGLE)
+        if positions and positions[-1] < pan_max - 5:  # 5 degree tolerance
+            positions.append(pan_max)
 
         return positions
 
     def move_to_position(self, servo_controller, pan_angle: float, tilt_angle: float):
         """Move servos to scan position (direct movement)."""
         print(f"Moving servos to Pan={pan_angle:.1f}°, Tilt={tilt_angle:.1f}°")
-        servo_controller.set_servo_angle(SERVO_PAN_CHANNEL, pan_angle)
-        servo_controller.set_servo_angle(SERVO_TILT_CHANNEL, tilt_angle)
-        print(f"Servo movement completed")
+        servo_controller.set_servo_angle("pan", pan_angle)
+        servo_controller.set_servo_angle("tilt", tilt_angle)
+        print("Servo movement completed")
 
-    async def move_to_position_async(self, servo_controller, pan_angle: float, tilt_angle: float, speed: float = 1.0):
+    async def move_to_position_async(
+        self, servo_controller, pan_angle: float, tilt_angle: float, speed: float = 1.0
+    ):
         """Async version using servo smooth movement if available."""
         if hasattr(servo_controller, 'smooth_move_to_angle'):
             # Move both servos concurrently
             await asyncio.gather(
-                servo_controller.smooth_move_to_angle(SERVO_PAN_CHANNEL, pan_angle, speed),
-                servo_controller.smooth_move_to_angle(SERVO_TILT_CHANNEL, tilt_angle, speed)
+                servo_controller.smooth_move_to_angle("pan", pan_angle, speed),
+                servo_controller.smooth_move_to_angle("tilt", tilt_angle, speed)
             )
         else:
             # Fallback to direct movement

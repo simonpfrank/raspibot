@@ -10,7 +10,7 @@ from raspibot.hardware.cameras.camera import Camera
 
 camera = Camera()
 camera.start()
-camera.detect()
+camera.process()
 
 while True:
     time.sleep(1)

@@ -32,37 +32,41 @@ DEFAULT_SCREEN_FONT_THIKCNESS = 1
 I2C_BUS: Final[int] = 1  # Standard I2C bus on Raspberry Pi
 PCA9685_ADDRESS: Final[int] = 0x40  # Default PCA9685 I2C address
 
+# PCA9685 Oscillator Calibration
+# Standard prescale for 50Hz with 25MHz oscillator = 121
+# This board's oscillator runs ~8% fast, so prescale 131 gives true 50Hz
+# Formula: prescale = round(osc_freq / (4096 * pwm_freq)) - 1
+PCA9685_PRESCALE: Final[int] = 131  # Calibrated for this specific PCA9685 board
+
 # Servo Configuration - Calibrated Values
 # Pan servo: 0.4ms=0°, 1.47ms=90°, 2.52ms=180°, 2.7ms≈200°
 # Tilt servo: 0.4ms=0°, 1.45ms=90°, 2.47ms=180°, 2.7ms≈200°
 SERVO_MIN_ANGLE: Final[int] = 0
-SERVO_MAX_ANGLE: Final[int] = (
-    180  # Updated to match logical range; 2.7ms ≈ 200° is physical max
-)
+SERVO_MAX_ANGLE: Final[int] = 180
 SERVO_DEFAULT_ANGLE: Final[int] = 90
-SERVO_PAN_CHANNEL: Final[int] = 0
-SERVO_TILT_CHANNEL: Final[int] = 1
-SERVO_CHANNELS: Final[list[int]] = [0, 1]  # Channels used for servos
 
-# Pan servo pulse width calibration (ms)
-SERVO_PAN_0_PULSE: Final[float] = 0.4  # 0°
-SERVO_PAN_90_PULSE: Final[float] = 1.47  # 90°
-SERVO_PAN_180_PULSE: Final[float] = 2.52  # 180°
-# SERVO_PAN_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
-SERVO_PAN_MIN_ANGLE: Final[int] = 0
-SERVO_PAN_MAX_ANGLE: Final[int] = 180
-SERVO_PAN_CENTER: Final[int] = 90
-
-
-# Tilt servo pulse width calibration (ms)
-SERVO_TILT_0_PULSE: Final[float] = 0.4  # 0°
-SERVO_TILT_90_PULSE: Final[float] = 1.4  # 90° (corrected)
-SERVO_TILT_180_PULSE: Final[float] = 2.47  # 180°
-# SERVO_TILT_MAX_PULSE: Final[float] = 2.7  # ~200° (physical max)
-
-SERVO_TILT_MIN_ANGLE: Final[int] = 0
-SERVO_TILT_MAX_ANGLE: Final[int] = 150
-SERVO_TILT_CENTER: Final[int] = 90
+# Servo configs: name -> {channel (PCA9685 hex), pulse calibration (ms)}
+# Channel values match the number printed on the PCA9685 board
+SERVO_CONFIGS: Final[Dict[str, Dict]] = {
+    "pan": {
+        "channel": 0x0E,  # PCA9685 channel 14
+        "min_pulse": 0.4,  # 0°
+        "center_pulse": 1.47,  # 90°
+        "max_pulse": 2.52,  # 180°
+        "min_angle": 0,
+        "max_angle": 180,
+        "default_angle": 90,
+    },
+    "tilt": {
+        "channel": 0x0F,  # PCA9685 channel 15
+        "min_pulse": 0.4,  # 0°
+        "center_pulse": 1.4,  # 90°
+        "max_pulse": 2.47,  # 180°
+        "min_angle": 0,
+        "max_angle": 150,
+        "default_angle": 90,
+    },
+}
 """
 # Calibrated Pulse Width Values (in milliseconds)
 SERVO_MIN_PULSE: Final[float] = 0.4   # 0 degrees

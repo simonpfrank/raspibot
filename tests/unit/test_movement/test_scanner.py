@@ -118,38 +118,38 @@ class TestMovement:
         """Test direct servo movement."""
         pattern = ScanPattern()
         mock_controller = Mock()
-        
+
         pattern.move_to_position(mock_controller, 90.0, 45.0)
-        
+
         # Should call set_servo_angle for both servos
         assert mock_controller.set_servo_angle.call_count == 2
-        
-        # Check calls were made with correct channels and angles
+
+        # Check calls were made with correct servo names and angles
         calls = mock_controller.set_servo_angle.call_args_list
-        
-        # Pan servo (channel 0) to 90 degrees
-        assert calls[0][0] == (0, 90.0)
-        # Tilt servo (channel 1) to 45 degrees  
-        assert calls[1][0] == (1, 45.0)
-    
+
+        # Pan servo to 90 degrees
+        assert calls[0][0] == ("pan", 90.0)
+        # Tilt servo to 45 degrees
+        assert calls[1][0] == ("tilt", 45.0)
+
     @pytest.mark.asyncio
     async def test_move_to_position_async_with_smooth(self):
         """Test async movement with smooth capability."""
         pattern = ScanPattern()
         mock_controller = Mock()
         mock_controller.smooth_move_to_angle = AsyncMock()
-        
+
         await pattern.move_to_position_async(mock_controller, 120.0, 60.0, speed=0.8)
-        
+
         # Should call smooth_move_to_angle for both servos
         assert mock_controller.smooth_move_to_angle.call_count == 2
-        
+
         # Check calls were made correctly
         calls = mock_controller.smooth_move_to_angle.call_args_list
-        
+
         # Should move both servos concurrently
-        assert calls[0][0] == (0, 120.0, 0.8)  # Pan
-        assert calls[1][0] == (1, 60.0, 0.8)   # Tilt
+        assert calls[0][0] == ("pan", 120.0, 0.8)
+        assert calls[1][0] == ("tilt", 60.0, 0.8)
     
     @pytest.mark.asyncio
     async def test_move_to_position_async_fallback(self):

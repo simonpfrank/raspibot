@@ -12,15 +12,11 @@ from typing import Dict, Optional
 from raspibot.settings.config import (
     I2C_BUS,
     PCA9685_ADDRESS,
-    SERVO_PAN_0_PULSE,
-    SERVO_PAN_90_PULSE,
-    SERVO_PAN_180_PULSE,
-    SERVO_TILT_0_PULSE,
-    SERVO_TILT_90_PULSE,
-    SERVO_TILT_180_PULSE,
+    PCA9685_PRESCALE,
     SERVO_MIN_ANGLE,
     SERVO_MAX_ANGLE,
     SERVO_DEFAULT_ANGLE,
+    SERVO_CONFIGS,
 )
 from raspibot.exceptions import HardwareException
 
@@ -60,13 +56,13 @@ def _apply_calibration(angle: float, offset: float) -> float:
 
 
 async def _smooth_move_implementation(
-    servo_controller, channel: int, target_angle: float, speed: float
+    servo_controller, name: str, target_angle: float, speed: float
 ) -> None:
     """Shared smooth movement implementation."""
     _validate_angle(target_angle)
     speed = max(0.1, min(1.0, speed))
 
-    current_angle = servo_controller.get_servo_angle(channel)
+    current_angle = servo_controller.get_servo_angle(name)
     angle_diff = target_angle - current_angle
 
     if abs(angle_diff) < 0.5:
@@ -77,10 +73,10 @@ async def _smooth_move_implementation(
     step_delay = 0.02 / speed
 
     for i in range(steps):
-        servo_controller.set_servo_angle(channel, current_angle + (step_size * i))
+        servo_controller.set_servo_angle(name, current_angle + (step_size * i))
         await asyncio.sleep(step_delay)
 
-    servo_controller.set_servo_angle(channel, target_angle)
+    servo_controller.set_servo_angle(name, target_angle)
     await asyncio.sleep(0.1)
 
 
@@ -93,9 +89,9 @@ class PCA9685ServoController:
         self.i2c_bus = i2c_bus
 
         self.pca = None
-        self.servos: Dict[int, servo.Servo] = {}
-        self.current_angles: Dict[int, float] = {}
-        self.calibration_offsets: Dict[int, float] = {}
+        self.servos: Dict[str, servo.Servo] = {}
+        self.current_angles: Dict[str, float] = {}
+        self.calibration_offsets: Dict[str, float] = {}
 
         if not ADAFRUIT_AVAILABLE:
             raise HardwareException("Adafruit libraries not available")
@@ -104,79 +100,105 @@ class PCA9685ServoController:
         self.logger.info("PCA9685 servo controller initialized")
 
     def _init_hardware(self) -> None:
-        """Initialize PCA9685 hardware."""
+        """Initialize PCA9685 hardware with calibrated prescale."""
         try:
             self.i2c = busio.I2C(board.SCL, board.SDA)
             self.pca = PCA9685(self.i2c, address=self.address)
             self.pca.frequency = 50
+            # Override prescale with calibrated value for this board's oscillator
+            # Standard prescale=121 for 50Hz, but this board runs ~8% fast
+            self._set_calibrated_prescale()
             self._create_servos()
         except Exception as e:
             raise HardwareException(f"PCA9685 initialization failed: {e}")
 
+    def _set_calibrated_prescale(self) -> None:
+        """Set calibrated prescale value to compensate for oscillator drift."""
+        import smbus2
+        mode1_reg = 0x00
+        prescale_reg = 0xFE
+        bus = smbus2.SMBus(I2C_BUS)
+        try:
+            # Enter sleep mode to set prescale
+            old_mode = bus.read_byte_data(self.address, mode1_reg)
+            bus.write_byte_data(self.address, mode1_reg, (old_mode & 0x7F) | 0x10)
+            bus.write_byte_data(self.address, prescale_reg, PCA9685_PRESCALE)
+            bus.write_byte_data(self.address, mode1_reg, old_mode)
+            time.sleep(0.005)
+            bus.write_byte_data(self.address, mode1_reg, old_mode | 0x80)
+            self.logger.info(f"PCA9685 prescale set to {PCA9685_PRESCALE} (calibrated)")
+        finally:
+            bus.close()
+
     def _create_servos(self) -> None:
-        """Create servo objects with calibrated pulse ranges."""
-        self.servos[0] = servo.Servo(
-            self.pca.channels[0],
-            min_pulse=int(SERVO_PAN_0_PULSE * 1000),
-            max_pulse=int(SERVO_PAN_180_PULSE * 1000),
-        )
+        """Create servo objects from SERVO_CONFIGS."""
+        for name, config in SERVO_CONFIGS.items():
+            channel = config["channel"]
+            self.servos[name] = servo.Servo(
+                self.pca.channels[channel],
+                min_pulse=int(config["min_pulse"] * 1000),
+                max_pulse=int(config["max_pulse"] * 1000),
+            )
+            self.current_angles[name] = config.get("default_angle", SERVO_DEFAULT_ANGLE)
+            self.logger.info(f"Created servo '{name}' on channel {channel:#x}")
 
-        self.servos[1] = servo.Servo(
-            self.pca.channels[1],
-            min_pulse=int(SERVO_TILT_0_PULSE * 1000),
-            max_pulse=int(SERVO_TILT_180_PULSE * 1000),
-        )
+    def set_servo_angle(self, name: str, angle: float) -> None:
+        """Set servo angle with validation and calibration.
 
-        self.current_angles = {0: SERVO_DEFAULT_ANGLE, 1: SERVO_DEFAULT_ANGLE}
-        self.logger.info("Created servos with calibrated pulse ranges")
+        Args:
+            name: Servo name (e.g., "pan", "tilt") - must match SERVO_CONFIGS key.
+            angle: Target angle in degrees.
 
-    def set_servo_angle(self, channel: int, angle: float) -> None:
-        """Set servo angle with validation and calibration."""
-        if channel not in self.servos:
-            raise HardwareException(f"Invalid channel: {channel}")
+        Raises:
+            HardwareException: If servo name is not found in SERVO_CONFIGS.
+        """
+        if name not in self.servos:
+            available = list(self.servos.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
 
         _validate_angle(angle)
-        if channel == 0:
+        if name == "pan":
             angle = _handle_jitter_zone(angle, self.logger)
 
-        offset = self.calibration_offsets.get(channel, 0.0)
+        offset = self.calibration_offsets.get(name, 0.0)
         adjusted_angle = _apply_calibration(angle, offset)
 
-        self.servos[channel].angle = adjusted_angle
-        self.current_angles[channel] = angle
+        self.servos[name].angle = adjusted_angle
+        self.current_angles[name] = angle
 
-        self.logger.debug(
-            f"Servo {channel} set to {angle}° (adjusted: {adjusted_angle}°)"
-        )
+        self.logger.debug(f"Servo '{name}' set to {angle}° (adjusted: {adjusted_angle}°)")
 
-    def get_servo_angle(self, channel: int) -> float:
+    def get_servo_angle(self, name: str) -> float:
         """Get current servo angle."""
-        if channel not in self.servos:
-            raise HardwareException(f"Invalid channel: {channel}")
-        return self.current_angles.get(channel, SERVO_DEFAULT_ANGLE)
+        if name not in self.servos:
+            available = list(self.servos.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+        return self.current_angles.get(name, SERVO_DEFAULT_ANGLE)
 
     async def smooth_move_to_angle(
-        self, channel: int, target_angle: float, speed: float = 1.0
+        self, name: str, target_angle: float, speed: float = 1.0
     ) -> None:
         """Move servo smoothly to target angle."""
-        if channel not in self.servos:
-            raise HardwareException(f"Invalid channel: {channel}")
-        await _smooth_move_implementation(self, channel, target_angle, speed)
+        if name not in self.servos:
+            available = list(self.servos.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+        await _smooth_move_implementation(self, name, target_angle, speed)
 
     def emergency_stop(self) -> None:
         """Emergency stop - servos maintain current positions."""
         self.logger.warning("Emergency stop activated")
 
-    def set_calibration_offset(self, channel: int, offset: float) -> None:
+    def set_calibration_offset(self, name: str, offset: float) -> None:
         """Set calibration offset for servo."""
-        if channel not in self.servos:
-            raise HardwareException(f"Invalid channel: {channel}")
-        self.calibration_offsets[channel] = offset
-        self.logger.info(f"Calibration offset for servo {channel}: {offset}°")
+        if name not in self.servos:
+            available = list(self.servos.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+        self.calibration_offsets[name] = offset
+        self.logger.info(f"Calibration offset for servo '{name}': {offset}°")
 
-    def get_calibration_offset(self, channel: int) -> float:
+    def get_calibration_offset(self, name: str) -> float:
         """Get calibration offset for servo."""
-        return self.calibration_offsets.get(channel, 0.0)
+        return self.calibration_offsets.get(name, 0.0)
 
     def shutdown(self) -> None:
         """Shutdown the controller."""
@@ -186,19 +208,25 @@ class PCA9685ServoController:
         """Get controller type."""
         return "PCA9685"
 
-    def get_available_channels(self) -> list[int]:
-        """Get available servo channels."""
+    def get_available_servos(self) -> list[str]:
+        """Get available servo names."""
         return list(self.servos.keys())
 
 
 class GPIOServoController:
     """GPIO-based servo controller for direct pin control."""
 
-    def __init__(self, servo_pins: Optional[Dict[int, int]] = None):
+    def __init__(self, servo_pins: Optional[Dict[str, int]] = None):
+        """Initialize GPIO servo controller.
+
+        Args:
+            servo_pins: Mapping of servo names to GPIO pin numbers (BCM).
+                       Defaults to {"pan": 17, "tilt": 18}.
+        """
         self.logger = logging.getLogger(__name__)
-        self.servo_pins = servo_pins or {0: 18, 1: 19}
-        self.current_angles: Dict[int, float] = {}
-        self.calibration_offsets: Dict[int, float] = {}
+        self.servo_pins: Dict[str, int] = servo_pins or {"pan": 17, "tilt": 18}
+        self.current_angles: Dict[str, float] = {}
+        self.calibration_offsets: Dict[str, float] = {}
         self.gpio_available = False
 
         self._init_gpio()
@@ -211,9 +239,10 @@ class GPIOServoController:
 
             GPIO.setmode(GPIO.BCM)
 
-            for channel, pin in self.servo_pins.items():
+            for name, pin in self.servo_pins.items():
                 GPIO.setup(pin, GPIO.OUT)
-                self.current_angles[channel] = SERVO_DEFAULT_ANGLE
+                config = SERVO_CONFIGS.get(name, {})
+                self.current_angles[name] = config.get("default_angle", SERVO_DEFAULT_ANGLE)
 
             self.gpio = GPIO
             self.gpio_available = True
@@ -223,36 +252,30 @@ class GPIOServoController:
         except Exception as e:
             self.logger.error(f"GPIO initialization failed: {e}")
 
-    def set_servo_angle(self, channel: int, angle: float) -> None:
+    def set_servo_angle(self, name: str, angle: float) -> None:
         """Set servo angle using GPIO PWM."""
-        if channel not in self.servo_pins:
-            raise HardwareException(f"Invalid channel: {channel}")
+        if name not in self.servo_pins:
+            available = list(self.servo_pins.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
 
         _validate_angle(angle)
-        angle = _handle_jitter_zone(angle, self.logger)
+        if name == "pan":
+            angle = _handle_jitter_zone(angle, self.logger)
 
-        offset = self.calibration_offsets.get(channel, 0.0)
+        offset = self.calibration_offsets.get(name, 0.0)
         adjusted_angle = _apply_calibration(angle, offset)
 
-        self._set_pwm_for_angle(channel, adjusted_angle)
-        self.current_angles[channel] = angle
+        self._set_pwm_for_angle(name, adjusted_angle)
+        self.current_angles[name] = angle
 
-        self.logger.debug(f"GPIO Servo {channel} set to {angle}°")
+        self.logger.debug(f"GPIO Servo '{name}' set to {angle}°")
 
-    def _set_pwm_for_angle(self, channel: int, angle: float) -> None:
-        """Set PWM for servo angle using calibrated values."""
-        if channel == 0:
-            min_pulse = SERVO_PAN_0_PULSE
-            center_pulse = SERVO_PAN_90_PULSE
-            max_pulse = SERVO_PAN_180_PULSE
-        elif channel == 1:
-            min_pulse = SERVO_TILT_0_PULSE
-            center_pulse = SERVO_TILT_90_PULSE
-            max_pulse = SERVO_TILT_180_PULSE
-        else:
-            min_pulse = 0.4
-            center_pulse = 1.45
-            max_pulse = 2.7
+    def _set_pwm_for_angle(self, name: str, angle: float) -> None:
+        """Set PWM for servo angle using calibrated values from SERVO_CONFIGS."""
+        config = SERVO_CONFIGS.get(name, {})
+        min_pulse = config.get("min_pulse", 0.4)
+        center_pulse = config.get("center_pulse", 1.45)
+        max_pulse = config.get("max_pulse", 2.7)
 
         if angle <= 0:
             pulse_width_ms = min_pulse
@@ -271,29 +294,31 @@ class GPIOServoController:
         duty_cycle = pulse_width_ms / 20.0
 
         if self.gpio_available:
-            pin = self.servo_pins[channel]
+            pin = self.servo_pins[name]
             pwm = self.gpio.PWM(pin, 50)
             pwm.start(duty_cycle * 100)
             time.sleep(0.1)
             pwm.stop()
         else:
             self.logger.debug(
-                f"SIMULATION: GPIO Servo {channel} -> {angle}° (pulse: {pulse_width_ms:.3f}ms)"
+                f"SIMULATION: GPIO Servo '{name}' -> {angle}° (pulse: {pulse_width_ms:.3f}ms)"
             )
 
-    def get_servo_angle(self, channel: int) -> float:
+    def get_servo_angle(self, name: str) -> float:
         """Get current servo angle."""
-        if channel not in self.servo_pins:
-            raise HardwareException(f"Invalid channel: {channel}")
-        return self.current_angles.get(channel, SERVO_DEFAULT_ANGLE)
+        if name not in self.servo_pins:
+            available = list(self.servo_pins.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+        return self.current_angles.get(name, SERVO_DEFAULT_ANGLE)
 
     async def smooth_move_to_angle(
-        self, channel: int, target_angle: float, speed: float = 1.0
+        self, name: str, target_angle: float, speed: float = 1.0
     ) -> None:
         """Move servo smoothly to target angle."""
-        if channel not in self.servo_pins:
-            raise HardwareException(f"Invalid channel: {channel}")
-        await _smooth_move_implementation(self, channel, target_angle, speed)
+        if name not in self.servo_pins:
+            available = list(self.servo_pins.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+        await _smooth_move_implementation(self, name, target_angle, speed)
 
     def emergency_stop(self) -> None:
         """Emergency stop."""
@@ -302,16 +327,17 @@ class GPIOServoController:
             for pin in self.servo_pins.values():
                 self.gpio.output(pin, False)
 
-    def set_calibration_offset(self, channel: int, offset: float) -> None:
+    def set_calibration_offset(self, name: str, offset: float) -> None:
         """Set calibration offset."""
-        if channel not in self.servo_pins:
-            raise HardwareException(f"Invalid channel: {channel}")
-        self.calibration_offsets[channel] = offset
-        self.logger.info(f"Calibration offset for GPIO servo {channel}: {offset}°")
+        if name not in self.servo_pins:
+            available = list(self.servo_pins.keys())
+            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+        self.calibration_offsets[name] = offset
+        self.logger.info(f"Calibration offset for GPIO servo '{name}': {offset}°")
 
-    def get_calibration_offset(self, channel: int) -> float:
+    def get_calibration_offset(self, name: str) -> float:
         """Get calibration offset."""
-        return self.calibration_offsets.get(channel, 0.0)
+        return self.calibration_offsets.get(name, 0.0)
 
     def shutdown(self) -> None:
         """Shutdown the controller."""
@@ -323,8 +349,8 @@ class GPIOServoController:
         """Get controller type."""
         return "GPIO"
 
-    def get_available_channels(self) -> list[int]:
-        """Get available servo channels."""
+    def get_available_servos(self) -> list[str]:
+        """Get available servo names."""
         return list(self.servo_pins.keys())
 
 
@@ -339,18 +365,18 @@ if __name__ == "__main__":
         try:
             controller = PCA9685ServoController()
             print(f"Initialized {controller.get_controller_type()} controller")
-            print(f"Available channels: {controller.get_available_channels()}")
+            print(f"Available servos: {controller.get_available_servos()}")
 
-            # print("Moving to 60°...")
-            # controller.set_servo_angle(0, 60)
-            # await asyncio.sleep(1)
-
-            print("Moving to 90°...")
-            await controller.smooth_move_to_angle(1, 100, speed=0.5)
+            print("Moving pan to 60°...")
+            controller.set_servo_angle("pan", 60)
             await asyncio.sleep(1)
 
-            print(f"Current angle: {controller.get_servo_angle(0)}°")
-            print(f"Current angle: {controller.get_servo_angle(1)}°")
+            print("Moving tilt to 100°...")
+            await controller.smooth_move_to_angle("tilt", 100, speed=0.5)
+            await asyncio.sleep(1)
+
+            print(f"Pan angle: {controller.get_servo_angle('pan')}°")
+            print(f"Tilt angle: {controller.get_servo_angle('tilt')}°")
 
             controller.shutdown()
             print("Demo completed")
