@@ -93,6 +93,122 @@ class TestServoDirectControl:
         await asyncio.sleep(0.3)
 
 
+class TestPanRangeSweep:
+    """Verify pan servo works across its full range, including jitter zone handling."""
+
+    @pytest.mark.parametrize("angle", [0.0, 30.0, 60.0, 86.0, 105.0, 130.0, 160.0, 180.0])
+    def test_pan_safe_angles(self, servo_controller, angle: float) -> None:
+        """Pan servo reaches each safe angle without jitter."""
+        servo_controller.set_servo_angle(ServoName.PAN, angle)
+        time.sleep(0.4)
+        assert servo_controller.get_servo_angle(ServoName.PAN) == angle
+
+        servo_controller.set_servo_angle(ServoName.PAN, BASE_PAN)
+        time.sleep(0.3)
+
+    @pytest.mark.parametrize(
+        "requested,expected",
+        [
+            (87.0, 86.0),   # low edge of jitter zone snaps down
+            (90.0, 86.0),   # mid-low snaps down
+            (95.0, 86.0),   # boundary snaps down
+            (96.0, 105.0),  # just above boundary snaps up
+            (100.0, 105.0), # mid-high snaps up
+            (104.0, 105.0), # high edge of jitter zone snaps up
+        ],
+    )
+    def test_pan_jitter_zone_snaps(
+        self, servo_controller, requested: float, expected: float
+    ) -> None:
+        """Pan angles in jitter zone (87-104) are adjusted to safe values."""
+        servo_controller.set_servo_angle(ServoName.PAN, requested)
+        time.sleep(0.4)
+        actual = servo_controller.get_servo_angle(ServoName.PAN)
+        assert actual == expected, f"Requested {requested}° expected snap to {expected}°, got {actual}°"
+
+        servo_controller.set_servo_angle(ServoName.PAN, BASE_PAN)
+        time.sleep(0.3)
+
+    @pytest.mark.parametrize("angle", [0.0, 50.0, 75.0, 120.0, 150.0])
+    def test_tilt_full_range(self, servo_controller, angle: float) -> None:
+        """Tilt servo reaches each angle across its full range."""
+        servo_controller.set_servo_angle(ServoName.TILT, angle)
+        time.sleep(0.4)
+        assert servo_controller.get_servo_angle(ServoName.TILT) == angle
+
+        servo_controller.set_servo_angle(ServoName.TILT, BASE_TILT)
+        time.sleep(0.3)
+
+
+class TestPanSmoothMovement:
+    """Verify smooth pan movement across various ranges."""
+
+    @pytest.mark.asyncio
+    async def test_smooth_pan_low_range(self, servo_controller) -> None:
+        """Smooth pan movement across low range (30 -> 70)."""
+        servo_controller.set_servo_angle(ServoName.PAN, 30.0)
+        await asyncio.sleep(0.3)
+
+        start = time.monotonic()
+        await servo_controller.smooth_move_to_angle(ServoName.PAN, 70.0, speed=0.5)
+        elapsed = time.monotonic() - start
+
+        assert elapsed > 0.1
+        assert servo_controller.get_servo_angle(ServoName.PAN) == 70.0
+
+        servo_controller.set_servo_angle(ServoName.PAN, BASE_PAN)
+        await asyncio.sleep(0.3)
+
+    @pytest.mark.asyncio
+    async def test_smooth_pan_high_range(self, servo_controller) -> None:
+        """Smooth pan movement across high range (110 -> 160)."""
+        servo_controller.set_servo_angle(ServoName.PAN, 110.0)
+        await asyncio.sleep(0.3)
+
+        start = time.monotonic()
+        await servo_controller.smooth_move_to_angle(ServoName.PAN, 160.0, speed=0.5)
+        elapsed = time.monotonic() - start
+
+        assert elapsed > 0.1
+        assert servo_controller.get_servo_angle(ServoName.PAN) == 160.0
+
+        servo_controller.set_servo_angle(ServoName.PAN, BASE_PAN)
+        await asyncio.sleep(0.3)
+
+    @pytest.mark.asyncio
+    async def test_smooth_pan_crosses_jitter_zone(self, servo_controller) -> None:
+        """Smooth pan movement that traverses through the jitter zone (60 -> 120)."""
+        servo_controller.set_servo_angle(ServoName.PAN, 60.0)
+        await asyncio.sleep(0.3)
+
+        start = time.monotonic()
+        await servo_controller.smooth_move_to_angle(ServoName.PAN, 120.0, speed=0.5)
+        elapsed = time.monotonic() - start
+
+        assert elapsed > 0.1
+        assert servo_controller.get_servo_angle(ServoName.PAN) == 120.0
+
+        servo_controller.set_servo_angle(ServoName.PAN, BASE_PAN)
+        await asyncio.sleep(0.3)
+
+    @pytest.mark.asyncio
+    async def test_smooth_pan_wide_sweep(self, servo_controller) -> None:
+        """Smooth pan full sweep from 20 to 160 at moderate speed."""
+        servo_controller.set_servo_angle(ServoName.PAN, 20.0)
+        await asyncio.sleep(0.3)
+
+        start = time.monotonic()
+        await servo_controller.smooth_move_to_angle(ServoName.PAN, 160.0, speed=0.3)
+        elapsed = time.monotonic() - start
+
+        # 140° sweep at speed=0.3 should take noticeable time
+        assert elapsed > 0.3
+        assert servo_controller.get_servo_angle(ServoName.PAN) == 160.0
+
+        servo_controller.set_servo_angle(ServoName.PAN, BASE_PAN)
+        await asyncio.sleep(0.3)
+
+
 class TestMotionControllerGestures:
     """Test gesture playback on real hardware."""
 

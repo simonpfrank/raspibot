@@ -166,7 +166,18 @@
 #### Direct Servo Control
 - `test_set_servo_angle_pan` - Pan servo moves to commanded angle on PCA9685
 - `test_set_servo_angle_tilt` - Tilt servo moves to commanded angle on PCA9685
-- `test_smooth_move_visible` - Smooth move produces gradual (non-instant) motion
+- `test_smooth_move_visible` - Smooth move on tilt produces gradual (non-instant) motion
+
+#### Pan Range Sweep (parametrized)
+- `test_pan_safe_angles[0/30/60/86/105/130/160/180]` - Pan reaches each safe angle without jitter (8 tests)
+- `test_pan_jitter_zone_snaps[87→86/90→86/95→86/96→105/100→105/104→105]` - Jitter zone angles snap to safe values (6 tests)
+- `test_tilt_full_range[0/50/75/120/150]` - Tilt reaches each angle across full range (5 tests)
+
+#### Pan Smooth Movement
+- `test_smooth_pan_low_range` - Smooth pan across low range (30° → 70°)
+- `test_smooth_pan_high_range` - Smooth pan across high range (110° → 160°)
+- `test_smooth_pan_crosses_jitter_zone` - Smooth pan traversing jitter zone (60° → 120°)
+- `test_smooth_pan_wide_sweep` - Smooth pan full sweep at slow speed (20° → 160°)
 
 #### Gesture Playback
 - `test_play_nod` - NOD produces visible tilt movement and completes
@@ -178,9 +189,9 @@
 - `test_apply_with_offset` - Offset shifts servo position from base
 - `test_clear_offset_returns_to_base` - Clearing offset returns to base position
 
-**Total: 9 tests**
+**Total: 32 tests**
 
 ---
 
 **Grand Total Unit Tests: 95 passing**
-**Grand Total Integration Tests: 9 passing**
+**Grand Total Integration Tests: 32 passing**

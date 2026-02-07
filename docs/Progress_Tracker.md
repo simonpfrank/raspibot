@@ -12,10 +12,10 @@
 | MotionOffset + OffsetComposer | ✅ Done | ✅ Done | ⏭️ N/A | ✅ Pass (19) | ⏭️ N/A |
 | SequencePlayer + MotionSequence | ✅ Done | ✅ Done | ⏭️ N/A | ✅ Pass (16) | ⏭️ N/A |
 | Gestures (NOD, SHAKE, ATTENTION) | ✅ Done | ✅ Done | ⏭️ N/A | ✅ Pass (13) | ⏭️ N/A |
-| MotionController | ✅ Done | ✅ Done | ✅ Done | ✅ Pass (11) | ✅ Pass (9) |
+| MotionController | ✅ Done | ✅ Done | ✅ Done | ✅ Pass (11) | ✅ Pass (32) |
 
 **Total Foundation Motion Unit Tests: 95 passing**
-**Total Integration Tests: 9 passing**
+**Total Integration Tests: 32 passing**
 **Coverage: 99% across all new modules**
 **Quality: ruff clean, radon clean (no C+ complexity)**
 
