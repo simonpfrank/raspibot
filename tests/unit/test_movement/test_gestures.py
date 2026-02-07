@@ -2,7 +2,7 @@
 
 import pytest
 
-from raspibot.movement.gestures import NOD, SHAKE, ATTENTION
+from raspibot.movement.gestures import ATTENTION, NO, NOD, SHAKE
 from raspibot.movement.motion_offset import MotionOffset
 from raspibot.movement.sequence import MotionSequence, SequencePlayer
 
@@ -22,6 +22,27 @@ class TestGestureDefinitions:
         """NOD primarily uses tilt axis."""
         for step in NOD.steps:
             assert step.target.pan == 0.0
+
+    def test_nod_returns_to_zero(self) -> None:
+        """NOD ends at zero offset."""
+        assert NOD.steps[-1].target.tilt == 0.0
+
+    def test_no_is_motion_sequence(self) -> None:
+        """NO is a MotionSequence."""
+        assert isinstance(NO, MotionSequence)
+
+    def test_no_name(self) -> None:
+        """NO has correct name."""
+        assert NO.name == "no"
+
+    def test_no_uses_pan(self) -> None:
+        """NO primarily uses pan axis."""
+        for step in NO.steps:
+            assert step.target.tilt == 0.0
+
+    def test_no_returns_to_zero(self) -> None:
+        """NO ends at zero offset."""
+        assert NO.steps[-1].target.pan == 0.0
 
     def test_shake_is_motion_sequence(self) -> None:
         """SHAKE is a MotionSequence."""
@@ -64,6 +85,14 @@ class TestGesturePlayback:
         offset = player.evaluate(mid_time)
         assert offset.tilt != 0.0
 
+    def test_no_produces_pan_offset(self) -> None:
+        """Playing NO produces pan offset during playback."""
+        player = SequencePlayer(NO)
+        player.start(0.0)
+        mid_time = NO.steps[0].duration / 2
+        offset = player.evaluate(mid_time)
+        assert offset.pan != 0.0
+
     def test_shake_produces_pan_offset(self) -> None:
         """Playing SHAKE produces pan offset during playback."""
         player = SequencePlayer(SHAKE)
@@ -74,7 +103,7 @@ class TestGesturePlayback:
 
     def test_all_gestures_complete(self) -> None:
         """All gestures complete after their total duration."""
-        for gesture in [NOD, SHAKE, ATTENTION]:
+        for gesture in [NOD, NO, SHAKE, ATTENTION]:
             player = SequencePlayer(gesture)
             player.start(0.0)
             player.evaluate(gesture.total_duration + 0.1)

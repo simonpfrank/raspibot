@@ -104,7 +104,7 @@ class TestPlayGesture:
         mc = MotionController(servo)
         mc.set_base(90.0, 75.0)
 
-        with patch("time.monotonic", side_effect=[0.0, 0.15, 0.3, 0.45, 0.6, 0.75]):
+        with patch("time.monotonic", side_effect=[0.0, 0.3, 0.6, 0.9, 1.1]):
             with patch("asyncio.sleep", new_callable=AsyncMock):
                 await mc.play_gesture(NOD)
 
@@ -117,7 +117,7 @@ class TestPlayGesture:
         mc = MotionController(servo)
         mc.set_base(90.0, 75.0)
 
-        with patch("time.monotonic", side_effect=[0.0, 0.3, 0.7]):
+        with patch("time.monotonic", side_effect=[0.0, 0.5, 1.1]):
             with patch("asyncio.sleep", new_callable=AsyncMock):
                 await mc.play_gesture(NOD)
 
@@ -138,7 +138,7 @@ class TestPlayGesture:
             nonlocal playing_during
             playing_during = mc.is_playing
 
-        with patch("time.monotonic", side_effect=[0.0, 0.3, 0.7]):
+        with patch("time.monotonic", side_effect=[0.0, 0.5, 1.1]):
             with patch("asyncio.sleep", side_effect=capture_playing):
                 await mc.play_gesture(NOD)
 
@@ -153,7 +153,7 @@ class TestPlayGesture:
         mc.set_base(90.0, 75.0)
         mc.set_offset("tracking", MotionOffset(pan=5.0))
 
-        with patch("time.monotonic", side_effect=[0.0, 0.3, 0.7]):
+        with patch("time.monotonic", side_effect=[0.0, 0.5, 1.1]):
             with patch("asyncio.sleep", new_callable=AsyncMock):
                 await mc.play_gesture(NOD)
 

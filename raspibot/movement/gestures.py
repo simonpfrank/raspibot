@@ -4,9 +4,10 @@ Each gesture is a MotionSequence that produces MotionOffset values.
 Feed these through SequencePlayer and OffsetComposer for playback.
 
 Available gestures:
-    NOD: Quick tilt down and back up (acknowledgment).
-    SHAKE: Pan left, right, center (disagreement/searching).
-    ATTENTION: Subtle tilt up, slight overshoot, settle (alertness).
+    NOD: Double nod — up, down, up, down to center (acknowledgment).
+    NO: Smooth head shake — right, left, right, back (disagreement).
+    SHAKE: Pan left, right, center (searching).
+    ATTENTION: Tilt up sharply, overshoot down, settle (alertness).
 
 Example:
     >>> from raspibot.movement.gestures import NOD
@@ -23,12 +24,48 @@ NOD = MotionSequence(
     name="nod",
     steps=(
         SequenceStep(
-            target=MotionOffset(tilt=-8.0),
-            duration=0.3,
+            target=MotionOffset(tilt=12.0),
+            duration=0.25,
+            method=InterpolationMethod.MINJERK,
+        ),
+        SequenceStep(
+            target=MotionOffset(tilt=-12.0),
+            duration=0.25,
+            method=InterpolationMethod.MINJERK,
+        ),
+        SequenceStep(
+            target=MotionOffset(tilt=12.0),
+            duration=0.25,
             method=InterpolationMethod.MINJERK,
         ),
         SequenceStep(
             target=MotionOffset(tilt=0.0),
+            duration=0.25,
+            method=InterpolationMethod.MINJERK,
+        ),
+    ),
+)
+
+NO = MotionSequence(
+    name="no",
+    steps=(
+        SequenceStep(
+            target=MotionOffset(pan=10.0),
+            duration=0.3,
+            method=InterpolationMethod.MINJERK,
+        ),
+        SequenceStep(
+            target=MotionOffset(pan=-10.0),
+            duration=0.3,
+            method=InterpolationMethod.MINJERK,
+        ),
+        SequenceStep(
+            target=MotionOffset(pan=10.0),
+            duration=0.3,
+            method=InterpolationMethod.MINJERK,
+        ),
+        SequenceStep(
+            target=MotionOffset(pan=0.0),
             duration=0.3,
             method=InterpolationMethod.MINJERK,
         ),
@@ -60,12 +97,12 @@ ATTENTION = MotionSequence(
     name="attention",
     steps=(
         SequenceStep(
-            target=MotionOffset(tilt=-5.0),
+            target=MotionOffset(tilt=-10.0),
             duration=0.2,
             method=InterpolationMethod.MINJERK,
         ),
         SequenceStep(
-            target=MotionOffset(tilt=3.0),
+            target=MotionOffset(tilt=6.0),
             duration=0.4,
             method=InterpolationMethod.MINJERK,
         ),
