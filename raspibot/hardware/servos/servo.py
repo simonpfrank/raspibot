@@ -7,8 +7,10 @@ Simple, clean servo control for PCA9685 and GPIO with shared utilities.
 import asyncio
 import time
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
+from raspibot.hardware.servos.servo_types import ServoName
+from raspibot.movement.interpolation import InterpolationMethod, interpolate
 from raspibot.settings.config import (
     I2C_BUS,
     PCA9685_ADDRESS,
@@ -19,6 +21,20 @@ from raspibot.settings.config import (
     SERVO_CONFIGS,
 )
 from raspibot.exceptions import HardwareException
+
+
+def _resolve_servo_name(name: Union[ServoName, str]) -> str:
+    """Convert ServoName enum or string to string key.
+
+    Args:
+        name: Servo name as enum or string.
+
+    Returns:
+        String key for internal lookup.
+    """
+    if isinstance(name, ServoName):
+        return name.value
+    return name
 
 try:
     import board
@@ -56,9 +72,21 @@ def _apply_calibration(angle: float, offset: float) -> float:
 
 
 async def _smooth_move_implementation(
-    servo_controller, name: str, target_angle: float, speed: float
+    servo_controller,
+    name: Union[ServoName, str],
+    target_angle: float,
+    speed: float,
+    method: InterpolationMethod = InterpolationMethod.LINEAR,
 ) -> None:
-    """Shared smooth movement implementation."""
+    """Shared smooth movement implementation.
+
+    Args:
+        servo_controller: Controller to move.
+        name: Servo name (enum or string).
+        target_angle: Target angle in degrees.
+        speed: Speed factor (0.1 to 1.0).
+        method: Interpolation curve to use.
+    """
     _validate_angle(target_angle)
     speed = max(0.1, min(1.0, speed))
 
@@ -69,11 +97,12 @@ async def _smooth_move_implementation(
         return
 
     steps = max(10, int(abs(angle_diff) / 2))
-    step_size = angle_diff / steps
     step_delay = 0.02 / speed
 
     for i in range(steps):
-        servo_controller.set_servo_angle(name, current_angle + (step_size * i))
+        t = i / steps
+        fraction = interpolate(t, method)
+        servo_controller.set_servo_angle(name, current_angle + angle_diff * fraction)
         await asyncio.sleep(step_delay)
 
     servo_controller.set_servo_angle(name, target_angle)
@@ -142,63 +171,79 @@ class PCA9685ServoController:
             self.current_angles[name] = config.get("default_angle", SERVO_DEFAULT_ANGLE)
             self.logger.info(f"Created servo '{name}' on channel {channel:#x}")
 
-    def set_servo_angle(self, name: str, angle: float) -> None:
+    def set_servo_angle(self, name: Union[ServoName, str], angle: float) -> None:
         """Set servo angle with validation and calibration.
 
         Args:
-            name: Servo name (e.g., "pan", "tilt") - must match SERVO_CONFIGS key.
+            name: Servo name as ServoName enum or string.
             angle: Target angle in degrees.
 
         Raises:
             HardwareException: If servo name is not found in SERVO_CONFIGS.
         """
-        if name not in self.servos:
+        key = _resolve_servo_name(name)
+        if key not in self.servos:
             available = list(self.servos.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
 
         _validate_angle(angle)
-        if name == "pan":
+        if key == ServoName.PAN.value:
             angle = _handle_jitter_zone(angle, self.logger)
 
-        offset = self.calibration_offsets.get(name, 0.0)
+        offset = self.calibration_offsets.get(key, 0.0)
         adjusted_angle = _apply_calibration(angle, offset)
 
-        self.servos[name].angle = adjusted_angle
-        self.current_angles[name] = angle
+        self.servos[key].angle = adjusted_angle
+        self.current_angles[key] = angle
 
-        self.logger.debug(f"Servo '{name}' set to {angle}° (adjusted: {adjusted_angle}°)")
+        self.logger.debug(f"Servo '{key}' set to {angle}° (adjusted: {adjusted_angle}°)")
 
-    def get_servo_angle(self, name: str) -> float:
+    def get_servo_angle(self, name: Union[ServoName, str]) -> float:
         """Get current servo angle."""
-        if name not in self.servos:
+        key = _resolve_servo_name(name)
+        if key not in self.servos:
             available = list(self.servos.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
-        return self.current_angles.get(name, SERVO_DEFAULT_ANGLE)
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
+        return self.current_angles.get(key, SERVO_DEFAULT_ANGLE)
 
     async def smooth_move_to_angle(
-        self, name: str, target_angle: float, speed: float = 1.0
+        self,
+        name: Union[ServoName, str],
+        target_angle: float,
+        speed: float = 1.0,
+        method: InterpolationMethod = InterpolationMethod.LINEAR,
     ) -> None:
-        """Move servo smoothly to target angle."""
-        if name not in self.servos:
+        """Move servo smoothly to target angle.
+
+        Args:
+            name: Servo name as ServoName enum or string.
+            target_angle: Target angle in degrees.
+            speed: Movement speed factor (0.1 to 1.0). Default 1.0.
+            method: Interpolation curve. Default LINEAR for backward compat.
+        """
+        key = _resolve_servo_name(name)
+        if key not in self.servos:
             available = list(self.servos.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
-        await _smooth_move_implementation(self, name, target_angle, speed)
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
+        await _smooth_move_implementation(self, name, target_angle, speed, method)
 
     def emergency_stop(self) -> None:
         """Emergency stop - servos maintain current positions."""
         self.logger.warning("Emergency stop activated")
 
-    def set_calibration_offset(self, name: str, offset: float) -> None:
+    def set_calibration_offset(self, name: Union[ServoName, str], offset: float) -> None:
         """Set calibration offset for servo."""
-        if name not in self.servos:
+        key = _resolve_servo_name(name)
+        if key not in self.servos:
             available = list(self.servos.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
-        self.calibration_offsets[name] = offset
-        self.logger.info(f"Calibration offset for servo '{name}': {offset}°")
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
+        self.calibration_offsets[key] = offset
+        self.logger.info(f"Calibration offset for servo '{key}': {offset}°")
 
-    def get_calibration_offset(self, name: str) -> float:
+    def get_calibration_offset(self, name: Union[ServoName, str]) -> float:
         """Get calibration offset for servo."""
-        return self.calibration_offsets.get(name, 0.0)
+        key = _resolve_servo_name(name)
+        return self.calibration_offsets.get(key, 0.0)
 
     def shutdown(self) -> None:
         """Shutdown the controller."""
@@ -252,23 +297,24 @@ class GPIOServoController:
         except Exception as e:
             self.logger.error(f"GPIO initialization failed: {e}")
 
-    def set_servo_angle(self, name: str, angle: float) -> None:
+    def set_servo_angle(self, name: Union[ServoName, str], angle: float) -> None:
         """Set servo angle using GPIO PWM."""
-        if name not in self.servo_pins:
+        key = _resolve_servo_name(name)
+        if key not in self.servo_pins:
             available = list(self.servo_pins.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
 
         _validate_angle(angle)
-        if name == "pan":
+        if key == ServoName.PAN.value:
             angle = _handle_jitter_zone(angle, self.logger)
 
-        offset = self.calibration_offsets.get(name, 0.0)
+        offset = self.calibration_offsets.get(key, 0.0)
         adjusted_angle = _apply_calibration(angle, offset)
 
-        self._set_pwm_for_angle(name, adjusted_angle)
-        self.current_angles[name] = angle
+        self._set_pwm_for_angle(key, adjusted_angle)
+        self.current_angles[key] = angle
 
-        self.logger.debug(f"GPIO Servo '{name}' set to {angle}°")
+        self.logger.debug(f"GPIO Servo '{key}' set to {angle}°")
 
     def _set_pwm_for_angle(self, name: str, angle: float) -> None:
         """Set PWM for servo angle using calibrated values from SERVO_CONFIGS."""
@@ -304,21 +350,34 @@ class GPIOServoController:
                 f"SIMULATION: GPIO Servo '{name}' -> {angle}° (pulse: {pulse_width_ms:.3f}ms)"
             )
 
-    def get_servo_angle(self, name: str) -> float:
+    def get_servo_angle(self, name: Union[ServoName, str]) -> float:
         """Get current servo angle."""
-        if name not in self.servo_pins:
+        key = _resolve_servo_name(name)
+        if key not in self.servo_pins:
             available = list(self.servo_pins.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
-        return self.current_angles.get(name, SERVO_DEFAULT_ANGLE)
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
+        return self.current_angles.get(key, SERVO_DEFAULT_ANGLE)
 
     async def smooth_move_to_angle(
-        self, name: str, target_angle: float, speed: float = 1.0
+        self,
+        name: Union[ServoName, str],
+        target_angle: float,
+        speed: float = 1.0,
+        method: InterpolationMethod = InterpolationMethod.LINEAR,
     ) -> None:
-        """Move servo smoothly to target angle."""
-        if name not in self.servo_pins:
+        """Move servo smoothly to target angle.
+
+        Args:
+            name: Servo name as ServoName enum or string.
+            target_angle: Target angle in degrees.
+            speed: Movement speed factor (0.1 to 1.0). Default 1.0.
+            method: Interpolation curve. Default LINEAR for backward compat.
+        """
+        key = _resolve_servo_name(name)
+        if key not in self.servo_pins:
             available = list(self.servo_pins.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
-        await _smooth_move_implementation(self, name, target_angle, speed)
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
+        await _smooth_move_implementation(self, name, target_angle, speed, method)
 
     def emergency_stop(self) -> None:
         """Emergency stop."""
@@ -327,17 +386,19 @@ class GPIOServoController:
             for pin in self.servo_pins.values():
                 self.gpio.output(pin, False)
 
-    def set_calibration_offset(self, name: str, offset: float) -> None:
+    def set_calibration_offset(self, name: Union[ServoName, str], offset: float) -> None:
         """Set calibration offset."""
-        if name not in self.servo_pins:
+        key = _resolve_servo_name(name)
+        if key not in self.servo_pins:
             available = list(self.servo_pins.keys())
-            raise HardwareException(f"Unknown servo '{name}'. Available: {available}")
-        self.calibration_offsets[name] = offset
-        self.logger.info(f"Calibration offset for GPIO servo '{name}': {offset}°")
+            raise HardwareException(f"Unknown servo '{key}'. Available: {available}")
+        self.calibration_offsets[key] = offset
+        self.logger.info(f"Calibration offset for GPIO servo '{key}': {offset}°")
 
-    def get_calibration_offset(self, name: str) -> float:
+    def get_calibration_offset(self, name: Union[ServoName, str]) -> float:
         """Get calibration offset."""
-        return self.calibration_offsets.get(name, 0.0)
+        key = _resolve_servo_name(name)
+        return self.calibration_offsets.get(key, 0.0)
 
     def shutdown(self) -> None:
         """Shutdown the controller."""
